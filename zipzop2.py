@@ -22,15 +22,15 @@ def receive_messages(udp_socket, message_ids):
                     message_id_str, text = message_parts
                     message_id_str = message_id_str.split(" ")[-1]
                     try:
-                        message_id = uuid.UUID(message_id_str)
+                        confirmation_message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         if len(all_messages) != 0:
-                            confirmation_message = f"Confirmation {message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            confirmation_message = f"Confirmation {confirmation_message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
                             udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                             # Armazenar mensagem na lista global
                             all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
                         else:
-                            confirmation_message = f"Confirmation {message_id} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            confirmation_message = f"Confirmation {confirmation_message_id} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
                             udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                             # Armazenar mensagem na lista global
                             all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
@@ -39,12 +39,13 @@ def receive_messages(udp_socket, message_ids):
             elif message.startswith("Confirmation"):
                 # Recebeu uma confirmação, extrai o ID
                 message_parts = message.split(" ")
-                if len(message_parts) == 5:
+                if len(message_parts) == 4:
                     message_id_str = message_parts[1].strip()
                     position_message = message_parts[3].strip()
-                    print(position_message)
+                    print("ZZZZZZZZZZZZ", position_message)
                     try:
-                        message_id = uuid.UUID(message_id_str)
+                        pass
+                        #message_id = uuid.UUID(message_id_str)
                     except ValueError:
                         print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
         except socket.timeout:
@@ -92,6 +93,7 @@ def display_output():
 def read_messages():
     with bloqued:
         print("\nTodas as mensagens:")
+        print(all_messages)
         for message in all_messages:
             print(f"{message[2]}. {message[1]} - De {message[0]}")
         print()
