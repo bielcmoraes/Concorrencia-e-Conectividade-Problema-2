@@ -2,6 +2,9 @@ import socket
 import threading
 import uuid
 
+# Lista global para armazenar mensagens recebidas
+received_messages = []
+
 # Função para receber mensagens
 def receive_messages(udp_socket, message_ids):
     while True:
@@ -19,6 +22,8 @@ def receive_messages(udp_socket, message_ids):
                         confirmation_message = f"Confirmation {message_id} : Message delivered"
                         udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                         print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
+                        # Adicione a mensagem à lista global
+                        received_messages.append(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
                     except ValueError:
                         print(f"Erro ao analisar o ID da mensagem: {message_id_str}")
             elif message.startswith("Confirmation"):
@@ -58,9 +63,22 @@ def send_messages(udp_socket, peer_addresses, message_ids):
 # Função para exibir mensagens de saída
 def display_output():
     while True:
-        user_input = input()
-        if user_input.lower() == 'exit':
+        user_input = input("Escolha uma opção:\n1. Enviar mensagem\n2. Ler mensagens recebidas\n3. Sair\nOpção: ")
+        if user_input == '1':
+            pass  # Continuar para enviar mensagens
+        elif user_input == '2':
+            read_received_messages()  # Chamar a função para ler mensagens recebidas
+        elif user_input == '3':
             break
+        else:
+            print("Opção inválida. Tente novamente.")
+
+# Função para ler mensagens recebidas
+def read_received_messages():
+    print("\nMensagens recebidas:")
+    for idx, message in enumerate(received_messages, start=1):
+        print(f"{idx}. {message}")
+    print()
 
 # Função principal
 def main():
