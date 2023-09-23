@@ -7,7 +7,13 @@ def receive_messages(udp_socket, peer_addresses):
         data, addr = udp_socket.recvfrom(1024)
         if data.decode('utf-8') == "join":
             # Quando receber a mensagem "join" do grupo, enviar a mensagem de confirmação "joined"
-            udp_socket.sendto("joined".encode('utf-8'), addr)  # Envie de volta ao remetente
+            confirm_received = False
+            while not confirm_received:
+                try:
+                    udp_socket.sendto("joined".encode('utf-8'), addr)  # Envie de volta ao remetente
+                    confirm_received = True
+                except socket.error:
+                    print("Erro ao enviar confirmação. Tentando novamente...")
             peer_addresses.append(addr)  # Adicione o remetente à lista de pares
         else:
             print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
@@ -102,7 +108,7 @@ def main():
 
     # Insira a porta em que deseja ouvir as mensagens
     listen_port = int(input("Digite a porta em que deseja ouvir: "))
-    udp_socket.bind(('0.0.0.0', listen_port))
+    udp_socket.bind(('192.168.0.121', listen_port))
 
     # Dicionário para armazenar os endereços dos grupos
     group_addresses = {}
