@@ -9,15 +9,28 @@ def receive_messages(udp_socket, message_ids):
             data, addr = udp_socket.recvfrom(1024)
             message = data.decode('utf-8')
             if message.startswith("Message"):
-                message_id, text = message.split(": ", 1)
-                message_id = uuid.UUID(message_id.split(" ")[-1])
-
-                # Enviar confirmação de entrega da mensagem com o mesmo ID
-                confirmation_message = f"Confirmation {message_id}: Message delivered"
-                udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+                message_parts = message.split(": ", 1)
+                if len(message_parts) == 2:
+                    message_id_str, text = message_parts
+                    message_id_str = message_id_str.split(" ")[-1]
+                    try:
+                        message_id = uuid.UUID(message_id_str)
+                        # Enviar confirmação de entrega da mensagem com o mesmo ID
+                        confirmation_message = f"Confirmation {message_id}: Message delivered"
+                        udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+                        print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
+                    except ValueError:
+                        print(f"Erro ao analisar o ID da mensagem: {message_id_str}")
             elif message.startswith("Confirmation"):
                 # Recebeu uma confirmação, extrai o ID
-                message_id = uuid.UUID(message.split(":")[-1].strip())
+                message_parts = message.split(": ")
+                if len(message_parts) == 2:
+                    message_id_str = message_parts[1].strip()
+                    try:
+                        message_id = uuid.UUID(message_id_str)
+                        print(f"Confirmação de entrega recebida para a mensagem {message_id}")
+                    except ValueError:
+                        print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
         except socket.timeout:
             pass
 
@@ -49,9 +62,14 @@ def send_messages(udp_socket, peer_addresses, message_ids):
                 data, addr = udp_socket.recvfrom(1024)
                 confirmation_message = data.decode('utf-8')
                 if confirmation_message.startswith("Confirmation"):
-                    confirmation_id = uuid.UUID(confirmation_message.split(" ")[-1])
-                    if confirmation_id == message_id:
-                        confirmations += 1
+                    confirmation_id_str = confirmation_message.split(": ")[1].strip()
+                    try:
+                        confirmation_id = uuid.UUID(confirmation_id_str)
+                        if confirmation_id in message_ids:
+                            confirmations += 1
+                            print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
+                    except ValueError:
+                        print(f"Erro ao analisar o ID da confirmação: {confirmation_id_str}")
             except socket.timeout:
                 pass
 
