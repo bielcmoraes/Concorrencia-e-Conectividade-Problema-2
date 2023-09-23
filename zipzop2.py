@@ -5,21 +5,24 @@ import uuid
 # Função para receber mensagens
 def receive_messages(udp_socket, message_ids):
     while True:
-        data, addr = udp_socket.recvfrom(1024)
-        message = data.decode('utf-8')
-        if message.startswith("Message"):
-            message_id, text = message.split(": ", 1)
-            message_id = uuid.UUID(message_id.split(" ")[-1])
+        try:
+            data, addr = udp_socket.recvfrom(1024)
+            message = data.decode('utf-8')
+            if message.startswith("Message"):
+                message_id, text = message.split(": ", 1)
+                message_id = uuid.UUID(message_id.split(" ")[-1])
 
-            # Enviar confirmação de entrega da mensagem com o mesmo ID
-            confirmation_message = f"Confirmation {message_id}: Message delivered"
-            udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
-            print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
-        elif message.startswith("Confirmation"):
-            # Recebeu uma confirmação, extrai o ID e imprime
-            message_id, confirmation_text = message.split(": ", 1)
-            message_id = uuid.UUID(message_id.split(" ")[-1])
-            print(f"Confirmação de entrega recebida para a mensagem {message_id}")
+                # Enviar confirmação de entrega da mensagem com o mesmo ID
+                confirmation_message = f"Confirmation {message_id}: Message delivered"
+                udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+                print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
+            elif message.startswith("Confirmation"):
+                # Recebeu uma confirmação, extrai o ID e imprime
+                message_id, confirmation_text = message.split(": ", 1)
+                message_id = uuid.UUID(message_id.split(" ")[-1])
+                print(f"Confirmação de entrega recebida para a mensagem {message_id}")
+        except socket.timeout:
+            print("Tempo limite de recepção. Tentando novamente...")
 
 # Função para enviar mensagens para vários pares com confirmação
 def send_messages(udp_socket_messages, udp_socket_confirmations, peer_addresses, message_ids):
@@ -38,6 +41,7 @@ def send_messages(udp_socket_messages, udp_socket_confirmations, peer_addresses,
         
         # Enviar a mensagem para todos os pares usando o socket de mensagens
         for peer_addr in peer_addresses:
+            print("AQUI FOI", message_with_id)
             udp_socket_messages.sendto(message_with_id.encode('utf-8'), peer_addr)
             
         # Inicialize um contador para as confirmações
@@ -54,7 +58,7 @@ def send_messages(udp_socket_messages, udp_socket_confirmations, peer_addresses,
                         confirmations += 1
                         print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
             except socket.timeout:
-                print("Tempo limite. Tentando novamente...")
+                print("Tempo limite de recepção. Tentando novamente...")
         
         print("Mensagem entregue com sucesso para todos os pares.")
 
@@ -62,6 +66,8 @@ def main():
     # Crie dois sockets, um para mensagens e outro para confirmações
     udp_socket_messages = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket_confirmations = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    udp_socket_messages.settimeout(2)  # Define um timeout de 2 segundos
 
     my_ip = input("Digite seu endereço IP: ")
     my_port_messages = int(input("Digite sua porta para mensagens: "))
