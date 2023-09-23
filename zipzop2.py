@@ -1,9 +1,9 @@
 import socket
-import asyncio
+import threading
 import uuid
 
 # Função para receber mensagens
-async def receive_messages(udp_socket, message_ids):
+def receive_messages(udp_socket, message_ids):
     while True:
         try:
             data, addr = udp_socket.recvfrom(1024)
@@ -15,19 +15,16 @@ async def receive_messages(udp_socket, message_ids):
                 # Enviar confirmação de entrega da mensagem com o mesmo ID
                 confirmation_message = f"Confirmation {message_id}: Message delivered"
                 udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
-                print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
             elif message.startswith("Confirmation"):
-                # Recebeu uma confirmação, extrai o ID e imprime
-                message_id, confirmation_text = message.split(": ", 1)
-                message_id = uuid.UUID(message_id.split(" ")[-1])
-                print(f"Confirmação de entrega recebida para a mensagem {message_id}")
+                # Recebeu uma confirmação, extrai o ID
+                message_id = uuid.UUID(message.split(":")[-1].strip())
         except socket.timeout:
-            print("")
+            pass
 
 # Função para enviar mensagens para vários pares com confirmação
-async def send_messages(udp_socket, peer_addresses, message_ids):
+def send_messages(udp_socket, peer_addresses, message_ids):
     while True:
-        message = await asyncio.to_thread(input, "Digite a mensagem a ser enviada (ou 'exit' para sair): ")
+        message = input("Digite a mensagem a ser enviada (ou 'exit' para sair): ")
         
         if message.lower() == 'exit':
             break
@@ -55,13 +52,18 @@ async def send_messages(udp_socket, peer_addresses, message_ids):
                     confirmation_id = uuid.UUID(confirmation_message.split(" ")[-1])
                     if confirmation_id == message_id:
                         confirmations += 1
-                        print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
             except socket.timeout:
-                print("Tempo limite de recepção. Tentando novamente...")
-        
-        print("Mensagem entregue com sucesso para todos os pares.")
+                pass
 
-async def main():
+# Função para exibir mensagens de saída
+def display_output():
+    while True:
+        user_input = input()
+        if user_input.lower() == 'exit':
+            break
+
+# Função principal
+def main():
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
 
@@ -81,18 +83,21 @@ async def main():
 
     message_ids = set()
 
-    # Crie uma tarefa asyncio para receber mensagens
-    receive_task = asyncio.create_task(receive_messages(udp_socket, message_ids))
+    # Crie threads para receber mensagens e exibir mensagens de saída
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, message_ids))
+    output_thread = threading.Thread(target=display_output)
     
-    # Crie uma tarefa asyncio para enviar mensagens
-    send_task = asyncio.create_task(send_messages(udp_socket, peer_addresses, message_ids))
+    # Defina a thread de exibição de saída como daemon para que ela possa ser interrompida quando o programa for encerrado
+    output_thread.daemon = True
 
-    print("Digite 'exit' para sair do chat.")
+    receive_thread.start()
+    output_thread.start()
 
-    await asyncio.gather(receive_task, send_task)
+    # Inicie a thread de envio de mensagens na thread principal
+    send_messages(udp_socket, peer_addresses, message_ids)
 
     # Feche o socket ao sair
     udp_socket.close()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
