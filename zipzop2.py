@@ -25,8 +25,13 @@ def main():
     listen_port = int(input("Digite a porta em que deseja ouvir: "))
     udp_socket.bind(('0.0.0.0', listen_port))
 
+    # Insira o endereço IP do outro usuário (Peer 2)
+    peer_ip = input("Digite o endereço IP do outro usuário (Peer 2): ")
+    peer_port = int(input("Digite a porta do outro usuário (Peer 2): "))
+    peer_address = (peer_ip, peer_port)
+
     # Crie uma lista para armazenar os endereços dos pares
-    peer_addresses = []
+    peer_addresses = [peer_address]
 
     # Inicia a thread para receber mensagens e passa o udp_socket como argumento
     receive_thread = threading.Thread(target=receive_messages, args=(udp_socket,))
