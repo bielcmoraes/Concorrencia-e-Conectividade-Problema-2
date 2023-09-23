@@ -67,7 +67,7 @@ def main():
     group_addresses = {}
 
     # Inicia a thread para receber mensagens no grupo geral
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, group_addresses, "Grupo Geral"))
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, group_addresses))
     receive_thread.daemon = True
     receive_thread.start()
 
