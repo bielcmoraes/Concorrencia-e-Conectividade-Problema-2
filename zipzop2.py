@@ -1,9 +1,9 @@
 import socket
-import threading
+import asyncio
 import uuid
 
 # Função para receber mensagens
-def receive_messages(udp_socket, message_ids):
+async def receive_messages(udp_socket, message_ids):
     while True:
         try:
             data, addr = udp_socket.recvfrom(1024)
@@ -25,9 +25,9 @@ def receive_messages(udp_socket, message_ids):
             print("")
 
 # Função para enviar mensagens para vários pares com confirmação
-def send_messages(udp_socket, peer_addresses, message_ids):
+async def send_messages(udp_socket, peer_addresses, message_ids):
     while True:
-        message = input("Digite a mensagem a ser enviada (ou 'exit' para sair): ")
+        message = await asyncio.to_thread(input, "Digite a mensagem a ser enviada (ou 'exit' para sair): ")
         
         if message.lower() == 'exit':
             break
@@ -61,7 +61,7 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         
         print("Mensagem entregue com sucesso para todos os pares.")
 
-def main():
+async def main():
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
 
@@ -81,25 +81,18 @@ def main():
 
     message_ids = set()
 
-    # Crie uma thread para receber mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, message_ids))
-    receive_thread.daemon = True
-    receive_thread.start()
-
-    # Crie uma thread para enviar mensagens
-    send_thread = threading.Thread(target=send_messages, args=(udp_socket, peer_addresses, message_ids))
-    send_thread.daemon = True
-    send_thread.start()
+    # Crie uma tarefa asyncio para receber mensagens
+    receive_task = asyncio.create_task(receive_messages(udp_socket, message_ids))
+    
+    # Crie uma tarefa asyncio para enviar mensagens
+    send_task = asyncio.create_task(send_messages(udp_socket, peer_addresses, message_ids))
 
     print("Digite 'exit' para sair do chat.")
 
-    while True:
-        user_input = input()
-        if user_input.lower() == 'exit':
-            break
+    await asyncio.gather(receive_task, send_task)
 
     # Feche o socket ao sair
     udp_socket.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
