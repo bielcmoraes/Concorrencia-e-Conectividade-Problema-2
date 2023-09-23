@@ -24,10 +24,10 @@ def receive_messages(udp_socket, message_ids):
                     try:
                         message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
-                        confirmation_message = f"Confirmation {message_id} : Message delivered"
+                        confirmation_message = f"Confirmation {message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
                         udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                         # Armazenar mensagem na lista global
-                        all_messages.append((addr, text, "Received"))  # Adiciona a etiqueta "Received"
+                        all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
                     except ValueError:
                         print(f"Erro ao analisar o ID da mensagem: {message_id_str}")
             elif message.startswith("Confirmation"):
@@ -35,6 +35,8 @@ def receive_messages(udp_socket, message_ids):
                 message_parts = message.split(" ")
                 if len(message_parts) == 5:
                     message_id_str = message_parts[1].strip()
+                    position_message = message_parts[3].strip()
+                    print(position_message)
                     try:
                         message_id = uuid.UUID(message_id_str)
                     except ValueError:
@@ -62,7 +64,7 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         for peer_addr in peer_addresses:
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
         # Armazenar mensagem na lista global
-        all_messages.append(("You", message, "Sent"))  # Adiciona a etiqueta "Sent"
+        all_messages.append(("You", message, "Sent", message_id))  # Adiciona a etiqueta "Sent"
 
 # Função para exibir mensagens de saída
 def display_output():
