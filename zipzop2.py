@@ -13,8 +13,7 @@ def receive_messages(udp_socket, peer_addresses):
 
 
 # Função para criar um grupo
-def create_group(udp_socket, listen_port, group_addresses):
-    group_name = input("Digite o nome do grupo: ")
+def create_group(udp_socket, listen_port, peer_addresses):
     group_ip = input("Digite o endereço IP do grupo: ")
     group_port = listen_port  # A porta do grupo é a mesma que a porta de escuta
 
@@ -26,11 +25,15 @@ def create_group(udp_socket, listen_port, group_addresses):
     try:
         data, addr = udp_socket.recvfrom(1024)
         if data.decode('utf-8') == "joined":
-            print(f"Grupo '{group_name}' criado. Agora você pode trocar mensagens no grupo.")
+            print("Grupo criado. Agora você pode trocar mensagens.")
             udp_socket.settimeout(None)
-            group_addresses[group_name] = group_address  # Adicione o grupo à lista de grupos
+            peer_addresses.append(group_address)  # Adicione o grupo à lista de pares
     except socket.timeout:
         print("Tempo limite. Não foi possível criar o grupo.")
+
+    # Envia mensagem de confirmação "joined" para o grupo
+    for peer_addr in peer_addresses:
+        udp_socket.sendto("joined".encode('utf-8'), peer_addr)
 
 # Função para trocar mensagens em um grupo
 def chat_in_group(udp_socket, group_addresses):
