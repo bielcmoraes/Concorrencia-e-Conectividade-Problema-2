@@ -1,6 +1,8 @@
 import socket
 import threading
 import uuid
+import os
+import platform
 
 # Lista global para armazenar mensagens recebidas
 received_messages = []
@@ -21,7 +23,7 @@ def receive_messages(udp_socket, message_ids):
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         confirmation_message = f"Confirmation {message_id} : Message delivered"
                         udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
-                        print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
+                        #print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
                         # Adicione a mensagem à lista global
                         received_messages.append(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
                     except ValueError:
@@ -42,6 +44,7 @@ def receive_messages(udp_socket, message_ids):
 # Função para enviar mensagens para vários pares com confirmação
 def send_messages(udp_socket, peer_addresses, message_ids):
     while True:
+
         message = input("Digite a mensagem a ser enviada (ou 'exit' para sair): ")
         
         if message.lower() == 'exit':
@@ -63,6 +66,7 @@ def send_messages(udp_socket, peer_addresses, message_ids):
 # Função para exibir mensagens de saída
 def display_output():
     while True:
+
         user_input = input("Escolha uma opção:\n1. Enviar mensagem\n2. Ler mensagens recebidas\n3. Sair\nOpção: ")
         if user_input == '1':
             pass  # Continuar para enviar mensagens
@@ -75,6 +79,7 @@ def display_output():
 
 # Função para ler mensagens recebidas
 def read_received_messages():
+
     print("\nMensagens recebidas:")
     for idx, message in enumerate(received_messages, start=1):
         print(f"{idx}. {message}")
@@ -84,6 +89,8 @@ def read_received_messages():
 def main():
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
+
+    clear_terminal()
 
     my_ip = input("Digite seu endereço IP: ")
     my_port = int(input("Digite sua porta: "))
@@ -98,7 +105,9 @@ def main():
         peer_port = int(input("Digite a porta do par: "))
         peer_address = (peer_ip, peer_port)
         peer_addresses.append(peer_address)
-
+    
+    clear_terminal()
+    
     message_ids = set()
 
     # Crie threads para receber mensagens e exibir mensagens de saída
@@ -116,6 +125,13 @@ def main():
 
     # Feche o socket ao sair
     udp_socket.close()
+
+def clear_terminal():
+    current_os = platform.system()
+    if current_os == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
 
 if __name__ == "__main__":
     main()
