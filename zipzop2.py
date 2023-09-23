@@ -7,7 +7,8 @@ def receive_messages(udp_socket, peer_addresses):
         data, addr = udp_socket.recvfrom(1024)
         if data.decode('utf-8') == "join":
             # Quando receber a mensagem "join" do grupo, enviar a mensagem de confirmação "joined"
-            udp_socket.sendto("joined".encode('utf-8'), addr)
+            udp_socket.sendto("joined".encode('utf-8'), addr)  # Envie de volta ao remetente
+            peer_addresses.append(addr)  # Adicione o remetente à lista de pares
         else:
             print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
 
