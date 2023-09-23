@@ -24,10 +24,16 @@ def receive_messages(udp_socket, message_ids):
                     try:
                         message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
-                        confirmation_message = f"Confirmation {message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
-                        udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
-                        # Armazenar mensagem na lista global
-                        all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
+                        if len(all_messages) != 0:
+                            confirmation_message = f"Confirmation {message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+                            # Armazenar mensagem na lista global
+                            all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
+                        else:
+                            confirmation_message = f"Confirmation {message_id} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+                            # Armazenar mensagem na lista global
+                            all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
                     except ValueError:
                         print(f"Erro ao analisar o ID da mensagem: {message_id_str}")
             elif message.startswith("Confirmation"):
