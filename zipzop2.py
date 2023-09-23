@@ -2,10 +2,14 @@ import socket
 import threading
 
 # Função para receber mensagens
-def receive_messages(udp_socket, peer_addresses, group_name):
+def receive_messages(udp_socket, peer_addresses):
     while True:
         data, addr = udp_socket.recvfrom(1024)
-        print(f"Mensagem de {addr[0]}:{addr[1]} no grupo '{group_name}': {data.decode('utf-8')}")
+        if data.decode('utf-8') == "join":
+            # Quando receber a mensagem "join" do grupo, enviar a mensagem de confirmação "joined"
+            udp_socket.sendto("joined".encode('utf-8'), addr)
+        else:
+            print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
 
 # Função para criar um grupo
 def create_group(udp_socket, listen_port, group_addresses):
@@ -15,7 +19,7 @@ def create_group(udp_socket, listen_port, group_addresses):
 
     group_address = (group_ip, group_port)
 
-    udp_socket.settimeout(5)
+    udp_socket.settimeout(50)
     udp_socket.sendto("join".encode('utf-8'), group_address)
 
     try:
