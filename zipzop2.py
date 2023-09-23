@@ -4,6 +4,9 @@ import uuid
 import os
 import platform
 
+# Cria um Lock
+bloqued = threading.Lock()
+
 # Lista global para armazenar mensagens recebidas
 received_messages = []
 
@@ -79,11 +82,11 @@ def display_output():
 
 # Função para ler mensagens recebidas
 def read_received_messages():
-
-    print("\nMensagens recebidas:")
-    for idx, message in enumerate(received_messages, start=1):
-        print(f"{idx}. {message}")
-    print()
+    with bloqued:
+        print("\nMensagens recebidas:")
+        for idx, message in enumerate(received_messages, start=1):
+            print(f"{idx}. {message}")
+        print()
 
 # Função principal
 def main():
@@ -107,7 +110,7 @@ def main():
         peer_addresses.append(peer_address)
     
     clear_terminal()
-    
+
     message_ids = set()
 
     # Crie threads para receber mensagens e exibir mensagens de saída
