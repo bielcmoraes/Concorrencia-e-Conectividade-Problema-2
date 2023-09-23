@@ -2,18 +2,14 @@ import socket
 import threading
 
 # Função para receber mensagens
-def receive_messages(udp_socket, peer_addresses):
+def receive_messages(udp_socket, peer_addresses, group_name):
     while True:
         data, addr = udp_socket.recvfrom(1024)
-        if data.decode('utf-8') == "join":
-            # Quando receber a mensagem "join" do grupo, enviar a mensagem de confirmação "joined"
-            udp_socket.sendto("joined".encode('utf-8'), addr)
-        else:
-            print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
-
+        print(f"Mensagem de {addr[0]}:{addr[1]} no grupo '{group_name}': {data.decode('utf-8')}")
 
 # Função para criar um grupo
-def create_group(udp_socket, listen_port, peer_addresses):
+def create_group(udp_socket, listen_port, group_addresses):
+    group_name = input("Digite o nome do grupo: ")
     group_ip = input("Digite o endereço IP do grupo: ")
     group_port = listen_port  # A porta do grupo é a mesma que a porta de escuta
 
@@ -25,15 +21,17 @@ def create_group(udp_socket, listen_port, peer_addresses):
     try:
         data, addr = udp_socket.recvfrom(1024)
         if data.decode('utf-8') == "joined":
-            print("Grupo criado. Agora você pode trocar mensagens.")
+            print(f"Grupo '{group_name}' criado. Agora você pode trocar mensagens no grupo.")
             udp_socket.settimeout(None)
-            peer_addresses.append(group_address)  # Adicione o grupo à lista de pares
+            group_addresses[group_name] = group_address  # Adicione o grupo à lista de grupos
+
+            # Envia mensagem de confirmação "joined" para o grupo
+            for peer_addr in group_addresses.values():
+                udp_socket.sendto("joined".encode('utf-8'), peer_addr)
+        else:
+            print("Erro ao criar o grupo.")
     except socket.timeout:
         print("Tempo limite. Não foi possível criar o grupo.")
-
-    # Envia mensagem de confirmação "joined" para o grupo
-    for peer_addr in peer_addresses:
-        udp_socket.sendto("joined".encode('utf-8'), peer_addr)
 
 # Função para trocar mensagens em um grupo
 def chat_in_group(udp_socket, group_addresses):
@@ -63,8 +61,8 @@ def main():
     # Dicionário para armazenar os endereços dos grupos
     group_addresses = {}
 
-    # Inicia a thread para receber mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, "Grupo Geral"))
+    # Inicia a thread para receber mensagens no grupo geral
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, group_addresses, "Grupo Geral"))
     receive_thread.daemon = True
     receive_thread.start()
 
