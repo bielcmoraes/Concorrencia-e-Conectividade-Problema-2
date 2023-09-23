@@ -52,26 +52,8 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
-            
-        # Inicialize um contador para as confirmações
-        confirmations = 0
         
-        # Aguarde as confirmações de entrega
-        while confirmations < len(peer_addresses):
-            try:
-                data, addr = udp_socket.recvfrom(1024)
-                confirmation_message = data.decode('utf-8')
-                if confirmation_message.startswith("Confirmation"):
-                    confirmation_id_str = confirmation_message.split(" : ")[1].strip()
-                    try:
-                        confirmation_id = uuid.UUID(confirmation_id_str)
-                        if confirmation_id in message_ids:
-                            confirmations += 1
-                            print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
-                    except ValueError:
-                        print(f"Erro ao analisar o ID da confirmação: {confirmation_id_str}")
-            except socket.timeout:
-                pass
+        print("Mensagem enviada com sucesso para todos os pares.")
 
 # Função para exibir mensagens de saída
 def display_output():
