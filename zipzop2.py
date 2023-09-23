@@ -37,8 +37,6 @@ def receive_messages(udp_socket, message_ids):
                     message_id_str = message_parts[1].strip()
                     try:
                         message_id = uuid.UUID(message_id_str)
-                        with bloqued:
-                            print(f"Confirmação de entrega recebida para a mensagem {message_id}")
                     except ValueError:
                         print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
         except socket.timeout:
@@ -65,8 +63,6 @@ def send_messages(udp_socket, peer_addresses, message_ids):
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
         # Armazenar mensagem na lista global
         all_messages.append(("You", message, "Sent"))  # Adiciona a etiqueta "Sent"
-        with bloqued:
-            print("Mensagem enviada com sucesso para todos os pares.")
 
 # Função para exibir mensagens de saída
 def display_output():
@@ -88,8 +84,8 @@ def display_output():
 def read_messages():
     with bloqued:
         print("\nTodas as mensagens:")
-        for idx, (sender, text, label) in enumerate(all_messages, start=1):
-            print(f"{idx}. {label} - De {sender[0]}:{sender[1]}: {text}")
+        for message in all_messages:
+            print(f"{message[2]}. {message[1]} - De {message[0]}")
         print()
 
 # Função principal
