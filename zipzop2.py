@@ -12,6 +12,19 @@ def receive_messages(udp_socket, peer_addresses):
         else:
             print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
 
+# Função para criar o grupo geral
+def create_general_group(udp_socket, listen_port, general_group_address):
+    udp_socket.settimeout(5)
+    udp_socket.sendto("join".encode('utf-8'), general_group_address)
+
+    try:
+        data, addr = udp_socket.recvfrom(1024)
+        if data.decode('utf-8') == "joined":
+            print("Grupo geral criado. Agora você pode trocar mensagens com todos os pares.")
+            udp_socket.settimeout(None)
+    except socket.timeout:
+        print("Tempo limite. Não foi possível criar o grupo geral.")
+
 # Função para criar um grupo
 def create_group(udp_socket, listen_port, group_addresses):
     group_name = input("Digite o nome do grupo: ")
@@ -20,7 +33,7 @@ def create_group(udp_socket, listen_port, group_addresses):
 
     group_address = (group_ip, group_port)
 
-    udp_socket.settimeout(50)
+    udp_socket.settimeout(5)
     udp_socket.sendto("join".encode('utf-8'), group_address)
 
     try:
@@ -63,8 +76,14 @@ def main():
     listen_port = int(input("Digite a porta em que deseja ouvir: "))
     udp_socket.bind(('0.0.0.0', listen_port))
 
+    # Endereço e porta para o grupo geral
+    general_group_address = ('IP_DO_GRUPO_GERAL', listen_port)  # Substitua 'IP_DO_GRUPO_GERAL' pelo IP desejado
+
     # Dicionário para armazenar os endereços dos grupos
     group_addresses = {}
+
+    # Crie o grupo geral
+    create_general_group(udp_socket, listen_port, general_group_address)
 
     # Inicia a thread para receber mensagens no grupo geral
     receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, group_addresses))
