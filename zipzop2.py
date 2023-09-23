@@ -6,10 +6,11 @@ import time
 def receive_messages(udp_socket):
     while True:
         data, addr = udp_socket.recvfrom(1024)
-        print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
-        # Enviar confirmação de entrega de mensagem
-        confirmation_message = "Message delivered"
-        udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
+        if data.decode('utf-8') != "Message delivered":
+            print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
+            # Enviar confirmação de entrega de mensagem
+            confirmation_message = "Message delivered"
+            udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
 
 # Função para enviar mensagens para vários pares com confirmação
 def send_messages(udp_socket, peer_addresses):
@@ -24,7 +25,7 @@ def send_messages(udp_socket, peer_addresses):
                 try:
                     data, addr = udp_socket.recvfrom(1024)
                     if data.decode('utf-8') == "Message delivered":
-                        print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
+                        #print(f"Confirmação de entrega recebida de {addr[0]}:{addr[1]}")
                         confirmation_received = True
                 except socket.timeout:
                     print(f"Tempo limite. Reenviando mensagem para {peer_addr[0]}:{peer_addr[1]}...")
@@ -37,7 +38,7 @@ def main():
     my_port = int(input("Digite sua porta: "))
 
     udp_socket.bind((my_ip, my_port))
-    udp_socket.settimeout(5)  # Configura um tempo limite para receber confirmações
+    #udp_socket.settimeout()  # Configura um tempo limite para receber confirmações
 
     num_peers = int(input("Quantos pares você deseja adicionar? "))
     peer_addresses = []
