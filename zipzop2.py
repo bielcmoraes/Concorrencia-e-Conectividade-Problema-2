@@ -2,21 +2,48 @@ import socket
 import threading
 
 # Função para receber mensagens
-def receive_messages(udp_socket):
+def receive_messages(udp_socket, group_name):
     while True:
-        try:
-            data, addr = udp_socket.recvfrom(1024)
-            print(f"Mensagem de {addr[0]}:{addr[1]}: {data.decode('utf-8')}")
-        except:
-            pass
+        data, addr = udp_socket.recvfrom(1024)
+        print(f"Mensagem de {addr[0]}:{addr[1]} no grupo '{group_name}': {data.decode('utf-8')}")
 
-# Função para enviar mensagens para todos os pares na lista de pares
-def send_messages(udp_socket, peer_addresses):
+# Função para criar um grupo
+def create_group(udp_socket, listen_port, group_addresses):
+    group_name = input("Digite o nome do grupo: ")
+    group_ip = input("Digite o endereço IP do grupo: ")
+    group_port = listen_port  # A porta do grupo é a mesma que a porta de escuta
+
+    group_address = (group_ip, group_port)
+
+    udp_socket.settimeout(5)
+    udp_socket.sendto("join".encode('utf-8'), group_address)
+
+    try:
+        data, addr = udp_socket.recvfrom(1024)
+        if data.decode('utf-8') == "joined":
+            print(f"Grupo '{group_name}' criado. Agora você pode trocar mensagens no grupo.")
+            udp_socket.settimeout(None)
+            group_addresses[group_name] = group_address  # Adicione o grupo à lista de grupos
+    except socket.timeout:
+        print("Tempo limite. Não foi possível criar o grupo.")
+
+# Função para trocar mensagens em um grupo
+def chat_in_group(udp_socket, group_addresses):
     while True:
-        message = input()
-        for peer_addr in peer_addresses:
-            udp_socket.sendto(message.encode('utf-8'), peer_addr)
+        user_input = input()
+        if user_input.lower() == 'exit':
+            break
 
+        # Solicitar o nome do grupo ao usuário
+        group_name = input("Digite o nome do grupo para enviar a mensagem: ")
+
+        if group_name in group_addresses:
+            group_address = group_addresses[group_name]
+            udp_socket.sendto(user_input.encode('utf-8'), group_address)
+        else:
+            print(f"Grupo '{group_name}' não encontrado. Certifique-se de que o grupo foi criado.")
+
+# Função principal
 def main():
     # Configuração do socket UDP
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -25,31 +52,26 @@ def main():
     listen_port = int(input("Digite a porta em que deseja ouvir: "))
     udp_socket.bind(('0.0.0.0', listen_port))
 
-    # Insira o endereço IP do outro usuário (Peer 2)
-    peer_ip = input("Digite o endereço IP do outro usuário (Peer 2): ")
-    peer_port = int(input("Digite a porta do outro usuário (Peer 2): "))
-    peer_address = (peer_ip, peer_port)
+    # Dicionário para armazenar os endereços dos grupos
+    group_addresses = {}
 
-    # Crie uma lista para armazenar os endereços dos pares
-    peer_addresses = [peer_address]
-
-    # Inicia a thread para receber mensagens e passa o udp_socket como argumento
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket,))
+    # Inicia a thread para receber mensagens
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, "Grupo Geral"))
     receive_thread.daemon = True
     receive_thread.start()
 
-    # Inicia a thread para enviar mensagens e passa udp_socket e peer_addresses como argumentos
-    send_thread = threading.Thread(target=send_messages, args=(udp_socket, peer_addresses))
-    send_thread.daemon = True
-    send_thread.start()
+    print("Digite 'exit' para sair do programa.")
 
-    print("Digite 'exit' para sair do chat.")
-
-    # Mantém o programa em execução
     while True:
-        user_input = input()
-        if user_input.lower() == 'exit':
+        user_input = input("Digite '1' para criar um grupo ou '2' para trocar mensagens em um grupo existente: ")
+        if user_input == '1':
+            create_group(udp_socket, listen_port, group_addresses)
+        elif user_input == '2':
+            chat_in_group(udp_socket, group_addresses)
+        elif user_input.lower() == 'exit':
             break
+        else:
+            print("Comando inválido. Digite '1' ou '2'.")
 
     # Fecha o soquete ao sair
     udp_socket.close()
