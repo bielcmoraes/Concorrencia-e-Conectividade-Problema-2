@@ -9,7 +9,7 @@ def receive_messages(udp_socket, message_ids):
             data, addr = udp_socket.recvfrom(1024)
             message = data.decode('utf-8')
             if message.startswith("Message"):
-                message_parts = message.split(": ", 1)
+                message_parts = message.split(" : ", 1)
                 if len(message_parts) == 2:
                     message_id_str, text = message_parts
                     message_id_str = message_id_str.split(" ")[-1]
@@ -27,7 +27,6 @@ def receive_messages(udp_socket, message_ids):
                 if len(message_parts) == 5:
                     message_id_str = message_parts[1].strip()
                     try:
-                        print("ZZZZZZZZ", message_parts)
                         message_id = uuid.UUID(message_id_str)
                         print(f"Confirmação de entrega recebida para a mensagem {message_id}")
                     except ValueError:
@@ -63,7 +62,7 @@ def send_messages(udp_socket, peer_addresses, message_ids):
                 data, addr = udp_socket.recvfrom(1024)
                 confirmation_message = data.decode('utf-8')
                 if confirmation_message.startswith("Confirmation"):
-                    confirmation_id_str = confirmation_message.split(": ")[1].strip()
+                    confirmation_id_str = confirmation_message.split(" : ")[1].strip()
                     try:
                         confirmation_id = uuid.UUID(confirmation_id_str)
                         if confirmation_id in message_ids:
