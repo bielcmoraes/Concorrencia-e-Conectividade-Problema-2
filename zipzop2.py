@@ -38,7 +38,8 @@ def receive_messages(udp_socket, message_ids):
                     message_id_str = message_parts[1].strip()
                     try:
                         message_id = uuid.UUID(message_id_str)
-                        print(f"Confirmação de entrega recebida para a mensagem {message_id}")
+                        with bloqued:
+                            print(f"Confirmação de entrega recebida para a mensagem {message_id}")
                     except ValueError:
                         print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
         except socket.timeout:
@@ -63,14 +64,15 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
-        
-        print("Mensagem enviada com sucesso para todos os pares.")
+        with bloqued:
+            print("Mensagem enviada com sucesso para todos os pares.")
 
 # Função para exibir mensagens de saída
 def display_output():
+    
     while True:
-
-        user_input = input("Escolha uma opção:\n1. Enviar mensagem\n2. Ler mensagens recebidas\n3. Sair\nOpção: ")
+        with bloqued:
+            user_input = input("Escolha uma opção:\n1. Enviar mensagem\n2. Ler mensagens recebidas\n3. Sair\nOpção: ")
         if user_input == '1':
             pass  # Continuar para enviar mensagens
         elif user_input == '2':
@@ -78,7 +80,8 @@ def display_output():
         elif user_input == '3':
             break
         else:
-            print("Opção inválida. Tente novamente.")
+            with bloqued:
+                print("Opção inválida. Tente novamente.")
 
 # Função para ler mensagens recebidas
 def read_received_messages():
