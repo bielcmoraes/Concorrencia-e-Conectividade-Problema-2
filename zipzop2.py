@@ -16,17 +16,18 @@ def receive_messages(udp_socket, message_ids):
                     try:
                         message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
-                        confirmation_message = f"Confirmation {message_id}: Message delivered"
+                        confirmation_message = f"Confirmation {message_id} : Message delivered"
                         udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                         print(f"Mensagem de {addr[0]}:{addr[1]}: {text}")
                     except ValueError:
                         print(f"Erro ao analisar o ID da mensagem: {message_id_str}")
             elif message.startswith("Confirmation"):
                 # Recebeu uma confirmação, extrai o ID
-                message_parts = message.split(": ")
-                if len(message_parts) == 2:
+                message_parts = message.split(" ")
+                if len(message_parts) == 5:
                     message_id_str = message_parts[1].strip()
                     try:
+                        print("ZZZZZZZZ", message_parts)
                         message_id = uuid.UUID(message_id_str)
                         print(f"Confirmação de entrega recebida para a mensagem {message_id}")
                     except ValueError:
@@ -47,7 +48,7 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         message_ids.add(message_id)
         
         # Crie uma mensagem formatada com o ID
-        message_with_id = f"Message {message_id}: {message}"
+        message_with_id = f"Message {message_id} : {message}"
         
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
