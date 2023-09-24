@@ -46,11 +46,8 @@ def receive_messages(udp_socket, message_ids):
                     try:
                         if position_message == "first": #Verifica se é a primeira mensagem
                             for message in all_messages: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
-                                print("CONFIRMADAAAAA NO FOR ALL_MESSAGES", all_messages)
-                                print("CONFIRMADAAAAA NO FOR ALL_MESSAGES", message_id_str)
                                 if message[3] == message_id_str:
                                     all_messages_sorted.insert(0, message)
-                                    print("pRIMEIRA ADD")
                         
                         for message in all_messages:
                             if message[3] == message_id_str: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
@@ -75,7 +72,6 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         
         # Gere um novo ID de mensagem
         message_id = uuid.uuid4()
-        print("esse É O id", message_id)
         message_ids.add(message_id)
         
         # Crie uma mensagem formatada com o ID
@@ -86,7 +82,6 @@ def send_messages(udp_socket, peer_addresses, message_ids):
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
         # Armazenar mensagem na lista global
         all_messages.append(("You", message, "Sent", str(message_id)))  # Adiciona a etiqueta "Sent"
-        print("ENVIADAAAAAAAA")
 
 # Função para exibir mensagens de saída
 def display_output():
