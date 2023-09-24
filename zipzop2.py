@@ -49,13 +49,13 @@ def receive_messages(udp_socket, message_ids):
                                 if message[3] == message_id_str:
                                     all_messages_sorted.insert(0, message)
                         
-                        for message in all_messages:
-                            if message[3] == message_id_str: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
-                                for message_sorted in all_messages_sorted:
-                                    if message[3] == position_message: #Encontra a posição de inserção
-                                        position_isertion_message = all_messages_sorted.index(message_sorted) + 1 #Pega o index da mensagem que eu quero inserir
-                                        all_messages_sorted.insert(position_isertion_message, message)
-                        #message_id = uuid.UUID(message_id_str)
+                        else:
+                            for message in all_messages:
+                                if message[3] == message_id_str: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
+                                    for message_sorted in all_messages_sorted:
+                                        if message_sorted[3] == position_message: #Encontra a posição de inserção
+                                            position_isertion_message = all_messages_sorted.index(message_sorted) + 1 #Pega o index da mensagem que eu quero inserir
+                                            all_messages_sorted.insert(position_isertion_message, message)
                     except ValueError:
                         print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
         except socket.timeout:
@@ -73,8 +73,6 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         # Gere um novo ID de mensagem
         message_id = uuid.uuid4()
         message_ids.add(message_id)
-        
-        # Crie uma mensagem formatada com o ID
         message_with_id = f"Message {message_id} : {message}"
         
         # Enviar a mensagem para todos os pares
