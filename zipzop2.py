@@ -23,7 +23,6 @@ def receive_messages(udp_socket, message_ids):
                     message_id_str, text = message_parts
                     message_id_str = message_id_str.split(" ")[-1]
                     try:
-                        #confirmation_message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         if len(all_messages) != 0:
                             confirmation_message = f"Confirmation {message_id_str} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
@@ -78,8 +77,17 @@ def send_messages(udp_socket, peer_addresses, message_ids):
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
             udp_socket.sendto(message_with_id.encode('utf-8'), peer_addr)
+            
+            if len(all_messages) == 0 and len(all_messages_sorted) == 0: #Confirmação que essa é a primeira mensagem nesse client
+                confirmation_message = f"Confirmation {message_id} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                udp_socket.sendto(confirmation_message.encode('utf-8'), peer_addr)
+            else:
+                confirmation_message = f"Confirmation {message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                udp_socket.sendto(confirmation_message.encode('utf-8'), peer_addr)
         # Armazenar mensagem na lista global
         all_messages.append(("You", message, "Sent", str(message_id)))  # Adiciona a etiqueta "Sent"
+
+        
 
 # Função para exibir mensagens de saída
 def display_output():
