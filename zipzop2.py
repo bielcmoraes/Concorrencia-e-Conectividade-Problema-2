@@ -9,6 +9,7 @@ bloqued = threading.Lock()
 
 # Lista global para armazenar todas as mensagens
 all_messages = []
+all_messages_sorted = []
 
 # Função para receber mensagens
 def receive_messages(udp_socket, message_ids):
@@ -22,15 +23,15 @@ def receive_messages(udp_socket, message_ids):
                     message_id_str, text = message_parts
                     message_id_str = message_id_str.split(" ")[-1]
                     try:
-                        confirmation_message_id = uuid.UUID(message_id_str)
+                        #confirmation_message_id = uuid.UUID(message_id_str)
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         if len(all_messages) != 0:
-                            confirmation_message = f"Confirmation {confirmation_message_id} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            confirmation_message = f"Confirmation {message_id_str} : {all_messages[-1][-1]}" #Envia o id da última mensagem da lista confirmando a posição da ordenação
                             udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                             # Armazenar mensagem na lista global
                             all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
                         else:
-                            confirmation_message = f"Confirmation {confirmation_message_id} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
+                            confirmation_message = f"Confirmation {message_id_str} : first" #Envia o id da última mensagem da lista confirmando a posição da ordenação
                             udp_socket.sendto(confirmation_message.encode('utf-8'), addr)
                             # Armazenar mensagem na lista global
                             all_messages.append((addr, text, "Received", message_id_str))  # Adiciona a etiqueta "Received"
@@ -42,9 +43,18 @@ def receive_messages(udp_socket, message_ids):
                 if len(message_parts) == 4:
                     message_id_str = message_parts[1].strip()
                     position_message = message_parts[3].strip()
-                    print("ZZZZZZZZZZZZ", position_message)
                     try:
-                        pass
+                        if position_message == "first": #Verifica se é a primeira mensagem
+                            for message in all_messages: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
+                                if message[3] == message_id_str:
+                                    all_messages_sorted.insert(0, message)
+                        
+                        for message in all_messages:
+                            if message[3] == message_id_str: #Verifica se a mensagem foi adicionada na lista de mensagens recebidas
+                                for message_sorted in all_messages_sorted:
+                                    if message[3] == position_message: #Encontra a posição de inserção
+                                        position_isertion_message = all_messages_sorted.index(message_sorted) + 1 #Pega o index da mensagem que eu quero inserir
+                                        all_messages_sorted.insert(position_isertion_message, message)
                         #message_id = uuid.UUID(message_id_str)
                     except ValueError:
                         print(f"Erro ao analisar o ID da confirmação: {message_id_str}")
