@@ -103,8 +103,7 @@ def display_output():
 def read_messages():
     with bloqued:
         print("\nTodas as mensagens:")
-        print(all_messages)
-        for message in all_messages:
+        for message in all_messages_sorted:
             print(f"{message[2]}. {message[1]} - De {message[0]}")
         print()
 
