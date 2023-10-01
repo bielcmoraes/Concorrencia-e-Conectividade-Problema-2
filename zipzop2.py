@@ -43,6 +43,9 @@ def sync_messages(udp_socket, message_text):
 
 # Função para reenviar pacotes não confirmados
 def resend_unconfirmed_packets(udp_socket):
+
+    global unconfirmed_packets
+
     while True:
         time.sleep(3)  # Verificar a cada 5 segundos
 
@@ -54,6 +57,7 @@ def resend_unconfirmed_packets(udp_socket):
                 udp_socket.sendto(packet_data["packet"], packet_data["address"])
                 # Atualize o horário de envio
                 unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
+        print("PIKAAAAA", unconfirmed_packets)
 
 
 # Função para enviar mensagens em partes
@@ -80,6 +84,8 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
 
         # Adicione o pacote não confirmado ao dicionário
         unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+        print("BUCETAAAA:", unconfirmed_packets)
+
 
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
@@ -218,6 +224,7 @@ def receive_messages(udp_socket, my_address):
                     # Remover o pacote confirmado do dicionário
                     if message_id in unconfirmed_packets:
                         del unconfirmed_packets[message_id]
+                        print("CUUUUUUUU", unconfirmed_packets)
                 
                 elif message_type == "Sync":
                     
@@ -250,12 +257,11 @@ def receive_messages(udp_socket, my_address):
                     
                     confirmation_message = {
                                 "message_type": "Confirmation",
-                                "message_id": message_id,
-                                "last_message_id": "first"
+                                "message_id": message_id
                             }
                     
                     addr_confirmation = message_data["sender"]
-                    udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr_confirmation)
+                    udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), tuple(addr_confirmation))
                         
         except socket.timeout:
             pass
