@@ -88,6 +88,12 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
         # Adicione o pacote não confirmado ao dicionário
         unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
 
+# Função para criptografar uma mensagem com a chave pública
+def encrypt_message(message, public_key):
+    cipher = PKCS1_OAEP.new(public_key)
+    encrypted_message = cipher.encrypt(message.encode())
+    return encrypted_message
+
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
 
@@ -246,9 +252,14 @@ def receive_messages(udp_socket, my_address):
                             for message in all_messages:
                                 send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
                             
+                            # Pegar address do usuário que ficou online
+                            ip_value = text_sync.split(" is online. Key: ")[0]
+
                             # Pegar a chave pública do usuário que ficou online
-                            split_text = text_sync.split("Key:", 1)
-                            print("HHJSJSJS: ", split_text)
+                            public_key = text_sync.split("Key:", 1)
+                            public_keys[ip_value] = public_key
+
+                            print(ip_value)
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -325,7 +336,7 @@ def main():
     global peer_addresses
 
     # Gerar um par de chaves RSA
-    key = RSA.generate(512)
+    key = RSA.generate(1024)
 
     # Exportar a chave pública e privada para arquivos
     private_key = key.export_key()
@@ -347,7 +358,7 @@ def main():
         receive_thread.start()
 
         # Informe que está online
-        message_text = f"{my_ip} is online. Key: {public_key}"
+        message_text = f"{(my_ip, my_port)} is online. Key: {public_key}"
         sync_messages(udp_socket, message_text)
 
         while True:
