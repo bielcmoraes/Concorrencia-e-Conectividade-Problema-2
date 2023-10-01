@@ -4,7 +4,7 @@ import uuid
 import os
 import platform
 import json
-from collections import Counter
+import time
 
 # Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.127", 4444)] # Pode e deve adicionar participantes manualmente ao grupo 
@@ -15,6 +15,9 @@ all_messages_sorted = []
 
 # Dicionário para armazenar as confirmações de mensagens
 confirmation_messages = {}
+
+# Dicionário para rastrear pacotes não confirmados e seus horários de envio
+unconfirmed_packets = {}
 
 # Função para sincronizar mensagens
 def sync_messages(udp_socket, message_text):
@@ -38,8 +41,23 @@ def sync_messages(udp_socket, message_text):
     for peer_addr in peer_addresses:
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
+# Função para reenviar pacotes não confirmados
+def resend_unconfirmed_packets(udp_socket):
+    while True:
+        time.sleep(3)  # Verificar a cada 5 segundos
+
+        for message_id, send_time in list(unconfirmed_packets.items()):
+            # Verifique se o tempo desde o envio excedeu um limite (por exemplo, 10 segundos)
+            if time.time() - send_time > 5:
+                # Reenvie o pacote correspondente
+                packet_data = unconfirmed_packets.pop(message_id)
+                udp_socket.sendto(packet_data["packet"], packet_data["address"])
+                # Atualize o horário de envio
+                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
+
+
 # Função para enviar mensagens em partes
-def send_parts(udp_socket, id, content, size, part):
+def send_parts(udp_socket, id, content, size, part, my_ip):
 
     global peer_addresses
 
@@ -47,6 +65,7 @@ def send_parts(udp_socket, id, content, size, part):
     message_data = {
         "message_type": "SyncP",
         "message_id": id,
+        "sender": my_ip,
         "content": content,
         "size": size,
         "part": part
@@ -59,10 +78,14 @@ def send_parts(udp_socket, id, content, size, part):
     for peer_addr in peer_addresses:
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
+        # Adicione o pacote não confirmado ao dicionário
+        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
 
     global peer_addresses
+    global unconfirmed_packets
 
     while True:
         message_text = input("Digite as mensagens (ou 'exit' para sair): ")
@@ -203,13 +226,13 @@ def receive_messages(udp_socket, my_address):
                             message_list_peers_id = str(uuid.uuid4())
                             # Envie a lista de pares atual
                             for peer in peer_addresses:
-                                send_parts(udp_socket, message_list_peers_id, "peer_addresses",peers_size, peer)
+                                send_parts(udp_socket, message_list_peers_id, "peer_addresses",peers_size, peer, my_address)
                             
                             # Gere um novo ID de mensagem
                             message_list_message_id = str(uuid.uuid4())
                             # Envie a lista de mensagens atual
                             for message in all_messages:
-                                send_parts(udp_socket, message_list_message_id, "messages_list",peers_size, message)
+                                send_parts(udp_socket, message_list_message_id, "messages_list",peers_size, message, my_address)
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -220,6 +243,15 @@ def receive_messages(udp_socket, my_address):
                             parts_messages[message_id].append(message_data)
                         else:
                             parts_messages[message_id] = [message_data]
+                    
+                    confirmation_message = {
+                                "message_type": "Confirmation",
+                                "message_id": message_id,
+                                "last_message_id": "first"
+                            }
+                    
+                    addr_confirmation = message_data["sender"]
+                    udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr_confirmation)
                         
         except socket.timeout:
             pass
@@ -278,7 +310,7 @@ def main():
     global peer_addresses
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.settimeout(2)  # Define um timeout de 2 segundos
+    udp_socket.settimeout(5)  # Define um timeout de 2 segundos
 
     try:
         clear_terminal()
