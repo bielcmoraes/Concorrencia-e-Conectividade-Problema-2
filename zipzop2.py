@@ -91,8 +91,15 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
 # Função para criptografar uma mensagem com a chave pública
 def encrypt_message(message, public_key):
     cipher = PKCS1_OAEP.new(public_key)
-    encrypted_message = cipher.encrypt(message.encode())
+    encrypted_message = cipher.encrypt(message.encode('utf-8'))
     return encrypted_message
+
+# Função para descriptografar uma mensagem com a chave privada
+def decrypt_message(encrypted_message, private_key):
+    private_key = RSA.import_key(private_key)
+    cipher = PKCS1_OAEP.new(private_key)
+    decrypted_message = cipher.decrypt(encrypted_message)
+    return decrypted_message.decode('utf-8')
 
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
@@ -128,7 +135,11 @@ def send_messages(udp_socket, my_ip):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
+            for peer in public_keys:
+                if peer_addr == peer: #Verifica se o par enviou a chave pública para criptografia
+                    public_key = public_keys.get(peer)
+                    message_encrypt = encrypt_message(message_json, public_key)
+                    udp_socket.sendto(message_encrypt.encode('utf-8'), peer_addr)
 
             # Crie um dicionário para a confirmação em formato JSON
             confirmation_data = {
@@ -169,10 +180,11 @@ def join_parts(parts_messages, my_address):
         return package_id
 
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, my_address):
+def receive_messages(udp_socket, my_address, private_key):
 
     global peer_addresses
     global unconfirmed_packets
+    global public_keys
 
     parts_messages = {}  
 
@@ -184,7 +196,10 @@ def receive_messages(udp_socket, my_address):
 
         try:
             data, addr = udp_socket.recvfrom(1024)
-            message_json = data.decode('utf-8')
+
+            data_decrypt = decrypt_message(data, private_key)
+
+            message_json = data_decrypt.decode('utf-8')
 
             # Desserializar a mensagem JSON
             message_data = json.loads(message_json)
@@ -257,9 +272,10 @@ def receive_messages(udp_socket, my_address):
 
                             # Pegar a chave pública do usuário que ficou online
                             public_key = text_sync.split("Key:", 1)
+
+                            # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
                             public_keys[ip_value] = public_key
 
-                            print(ip_value)
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -338,8 +354,8 @@ def main():
     # Gerar um par de chaves RSA
     key = RSA.generate(1024)
 
-    # Exportar a chave pública e privada para arquivos
-    private_key = key.export_key()
+    # Exportar as chaves pública e privada
+    private_key = key.export_key().decode('utf-8')
     public_key = key.publickey().export_key().decode('utf-8')
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -354,7 +370,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port)))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key))
         receive_thread.start()
 
         # Informe que está online
