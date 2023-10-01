@@ -114,23 +114,33 @@ def send_messages(udp_socket, peer_addresses, my_ip):
 
         all_messages.append(message_data)
 
+# função para juntar as partes das mensagens no local adequado
+def join_parts(parts_messages, my_address):
+    for package_id in parts_messages:
+            package_list = parts_messages.get(package_id)
+            if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
+                if package_list[0]["content"] == "peer_addresses":
+                    for package in package_list:
+                        if package["part"] not in peer_addresses and package["part"] != my_address:
+                            peer_addresses.append(package["part"])
+                            return package_id
+                        
+                elif package_list[0]["content"] == "messages_list":
+                    for package in package_list:
+                        all_messages.append(package["part"])
+                        return package_id
+
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, peer_addresses):
+def receive_messages(udp_socket, peer_addresses, my_address):
 
-    parts_messages = {}
-
-    for package_list in parts_messages:
-        if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
-            if package_list[0]["content"] == "peer_addresses":
-                for package in package_list:
-                    if package["part"] not in peer_addresses:
-                        peer_addresses.append(package["part"])
-            
-            elif package_list[0]["content"] == "messages_list":
-                for package in package_list:
-                    all_messages.append(package["part"])   
+    parts_messages = {}  
 
     while True:
+        
+        package_id = join_parts(parts_messages, my_address)
+        if package_id is not None:
+            parts_messages.pop(package_id)
+
         try:
             data, addr = udp_socket.recvfrom(1024)
             message_json = data.decode('utf-8')
@@ -209,7 +219,6 @@ def receive_messages(udp_socket, peer_addresses):
                         else:
                             parts_messages[message_id] = [message_data]
                         
-                        print("CHEGOU AQUI")
         except socket.timeout:
             pass
 
@@ -278,7 +287,7 @@ def main():
     udp_socket.bind((my_ip, my_port))
 
     # Crie uma thread para receber mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, peer_addresses))
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, peer_addresses, (my_ip, my_port)))
     receive_thread.start()
 
     # Crie uma thread para informar que está online
