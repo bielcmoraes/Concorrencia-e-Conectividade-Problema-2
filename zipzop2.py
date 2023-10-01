@@ -5,9 +5,14 @@ import os
 import platform
 import json
 import time
+from Cryptodome.Cipher import PKCS1_OAEP
+from Cryptodome.PublicKey import RSA
+from Cryptodome.Random import get_random_bytes
+
 
 # Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.127", 4444)] # Pode e deve adicionar participantes manualmente ao grupo 
+public_keys = {}
 
 # Lista global para armazenar todas as mensagens
 all_messages = []
@@ -57,8 +62,6 @@ def resend_unconfirmed_packets(udp_socket):
                 udp_socket.sendto(packet_data["packet"], packet_data["address"])
                 # Atualize o horário de envio
                 unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
-        print("PIKAAAAA", unconfirmed_packets)
-
 
 # Função para enviar mensagens em partes
 def send_parts(udp_socket, id, content, size, part, my_ip):
@@ -84,8 +87,6 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
 
         # Adicione o pacote não confirmado ao dicionário
         unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
-        print("BUCETAAAA:", unconfirmed_packets)
-
 
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
@@ -137,7 +138,8 @@ def send_messages(udp_socket, my_ip):
             # Envie a confirmação
             udp_socket.sendto(confirmation_json.encode('utf-8'), peer_addr)
 
-        all_messages.append(message_data)
+        if message_data not in all_messages:
+            all_messages.append(message_data)
 
 # função para juntar as partes das mensagens no local adequado
 def join_parts(parts_messages, my_address):
@@ -188,7 +190,8 @@ def receive_messages(udp_socket, my_address):
                         message_id = message_data["message_id"]
                         
                         # Armazena a mensagem na lista desordenada
-                        all_messages.append(message_data)
+                        if message_data not in all_messages:
+                            all_messages.append(message_data)
 
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         if len(all_messages) != 0:
@@ -230,7 +233,6 @@ def receive_messages(udp_socket, my_address):
                     if "message_id" in message_data and "text" in message_data:
                         text_sync = message_data["text"]
                         if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
-                            print(text_sync) #Mostra na tela que o usuário ficou online
                             peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
                             message_list_peers_id = str(uuid.uuid4())
@@ -243,6 +245,10 @@ def receive_messages(udp_socket, my_address):
                             # Envie a lista de mensagens atual
                             for message in all_messages:
                                 send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
+                            
+                            # Pegar a chave pública do usuário que ficou online
+                            split_text = text_sync.split("Key:", 1)
+                            print("HHJSJSJS: ", split_text)
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -318,6 +324,13 @@ def main():
 
     global peer_addresses
 
+    # Gerar um par de chaves RSA
+    key = RSA.generate(2048)
+
+    # Exportar a chave pública e privada para arquivos
+    private_key = key.export_key()
+    public_key = key.publickey().export_key()
+
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
 
@@ -334,7 +347,7 @@ def main():
         receive_thread.start()
 
         # Informe que está online
-        message_text = f"{my_ip} is online"
+        message_text = f"{my_ip} is online. Key: {public_key}"
         sync_messages(udp_socket, message_text)
 
         while True:
