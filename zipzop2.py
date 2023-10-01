@@ -282,58 +282,63 @@ def main():
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
 
-    clear_terminal()
+    try:
+        clear_terminal()
 
-    my_ip = input("Digite seu endereço IP: ")
-    my_port = int(input("Digite sua porta: "))
+        my_ip = input("Digite seu endereço IP: ")
+        my_port = int(input("Digite sua porta: "))
 
-    udp_socket.bind((my_ip, my_port))
+        udp_socket.bind((my_ip, my_port))
 
-    # Crie uma thread para receber mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port)))
-    receive_thread.start()
+        # Crie uma thread para receber mensagens
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port)))
+        receive_thread.start()
 
-    # Crie uma thread para informar que está online
-    message_text = f"{my_ip} is online"
-    sync_messages_thread = threading.Thread(target=sync_messages, args=(udp_socket, message_text))
-    sync_messages_thread.start()
+        # Crie uma thread para informar que está online
+        message_text = f"{my_ip} is online"
+        sync_messages_thread = threading.Thread(target=sync_messages, args=(udp_socket, message_text))
+        sync_messages_thread.start()
 
-    while True:
-        print("[1] Para adicionar participantes a um grupo")
-        print("[2] Para enviar mensagens")
-        print("[3] Para visualizar mensagens")
-        print("[4] Para sair")
+        while True:
+            print("[1] Para adicionar participantes a um grupo")
+            print("[2] Para enviar mensagens")
+            print("[3] Para visualizar mensagens")
+            print("[4] Para sair")
 
-        menu_main = int(input())
+            menu_main = int(input())
 
-        if menu_main == 1:
-            num_peers = int(input("Quantos participantes deseja adicionar no grupo?"))
+            if menu_main == 1:
+                num_peers = int(input("Quantos participantes deseja adicionar no grupo?"))
 
-            for _ in range(num_peers):
-                peer_ip = input("Digite o endereço IP do par: ")
-                peer_port = int(input("Digite a porta do par: "))
-                peer_address = (peer_ip, peer_port)
-                peer_addresses.append(peer_address)
+                for _ in range(num_peers):
+                    peer_ip = input("Digite o endereço IP do par: ")
+                    peer_port = int(input("Digite a porta do par: "))
+                    peer_address = (peer_ip, peer_port)
+                    peer_addresses.append(peer_address)
 
-            # Enviar para todos os pares que alguém foi adicionado ao grupo
-            for peer in peer_addresses:
-                message_text = f"{my_ip} added {peer} to the group"
-                create_group_thread = threading.Thread(target=sync_messages, args=(udp_socket, [peer], message_text))
-                create_group_thread.start()
-            clear_terminal()
+                # Enviar para todos os pares que alguém foi adicionado ao grupo
+                for peer in peer_addresses:
+                    message_text = f"{my_ip} added {peer} to the group"
+                    create_group_thread = threading.Thread(target=sync_messages, args=(udp_socket, [peer], message_text))
+                    create_group_thread.start()
+                clear_terminal()
 
-        elif menu_main == 2:
-            # Inicie a thread de envio de mensagens na thread principal
-            send_messages(udp_socket, my_ip)
-            clear_terminal()
+            elif menu_main == 2:
+                # Inicie a thread de envio de mensagens na thread principal
+                send_messages(udp_socket, my_ip)
+                clear_terminal()
 
-        elif menu_main == 3:
-            read_messages()
+            elif menu_main == 3:
+                read_messages()
 
-        elif menu_main == 4:
-            # Feche o socket ao sair
-            udp_socket.close()
-            exit()
+            elif menu_main == 4:
+                # Feche o socket ao sair
+                udp_socket.close()
+                exit()
+    except Exception as e:
+        print(f"Error: {str(e)}")
+    finally:
+        udp_socket.close()
 
 if __name__ == "__main__":
     main()
