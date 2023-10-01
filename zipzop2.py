@@ -85,7 +85,6 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
 def send_messages(udp_socket, my_ip):
 
     global peer_addresses
-    global unconfirmed_packets
 
     while True:
         message_text = input("Digite as mensagens (ou 'exit' para sair): ")
@@ -159,6 +158,7 @@ def join_parts(parts_messages, my_address):
 def receive_messages(udp_socket, my_address):
 
     global peer_addresses
+    global unconfirmed_packets
 
     parts_messages = {}  
 
@@ -214,6 +214,10 @@ def receive_messages(udp_socket, my_address):
                             confirmation_messages[message_id].append(message_data)
                         else:
                             confirmation_messages[message_id] = [message_data]
+                    
+                    # Remover o pacote confirmado do dicionário
+                    if message_id in unconfirmed_packets:
+                        del unconfirmed_packets[message_id]
                 
                 elif message_type == "Sync":
                     
