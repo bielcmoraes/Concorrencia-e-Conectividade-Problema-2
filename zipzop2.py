@@ -6,18 +6,21 @@ import platform
 import json
 from collections import Counter
 
-# Cria um Lock
-
+# Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.127", 4444)] # Pode e deve adicionar participantes manualmente ao grupo 
 
 # Lista global para armazenar todas as mensagens
 all_messages = []
 all_messages_sorted = []
 
+# Dicionário para armazenar as confirmações de mensagens
 confirmation_messages = {}
 
 # Função para sincronizar mensagens
-def sync_messages(udp_socket, peer_addresses, message_text):
+def sync_messages(udp_socket, message_text):
+
+    global peer_addresses
+
     # Gere um novo ID de mensagem
     message_id = str(uuid.uuid4())
 
@@ -36,7 +39,9 @@ def sync_messages(udp_socket, peer_addresses, message_text):
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
 # Função para enviar mensagens em partes
-def send_parts(udp_socket, peer_addresses, id, content, size, part):
+def send_parts(udp_socket, id, content, size, part):
+
+    global peer_addresses
 
     # Crie um dicionário para a mensagem em formato JSON
     message_data = {
@@ -53,20 +58,12 @@ def send_parts(udp_socket, peer_addresses, id, content, size, part):
     # Enviar a mensagem para todos os pares
     for peer_addr in peer_addresses:
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
-# Função para receber mensagens em partes
-def receive_parts(parts_messages, message_id, part):
-    
-    print(part)
-    # Verifica se existe uma chave para a parte da mensagem
-    message_part_exists = parts_messages.get(message_id)
-
-    if message_part_exists is not None:
-        parts_messages[message_id].append(part)
-    else:
-       parts_messages[message_id] = [part] 
 
 # Função para enviar mensagens em segundo plano
-def send_messages(udp_socket, peer_addresses, my_ip):
+def send_messages(udp_socket, my_ip):
+
+    global peer_addresses
+
     while True:
         message_text = input("Digite as mensagens (ou 'exit' para sair): ")
 
@@ -77,7 +74,7 @@ def send_messages(udp_socket, peer_addresses, my_ip):
         message_id = str(uuid.uuid4())
 
         # Verifique a posição da mensagem na lista
-        if len(all_messages) == 0 and len(all_messages_sorted) == 0:
+        if len(all_messages) == 0:
             last_message_id = "first"
         else:
             last_message_id = all_messages[-1]["message_id"]
@@ -116,13 +113,17 @@ def send_messages(udp_socket, peer_addresses, my_ip):
 
 # função para juntar as partes das mensagens no local adequado
 def join_parts(parts_messages, my_address):
+    
+    global peer_addresses
+    global all_messages
+
     for package_id in parts_messages:
             package_list = parts_messages.get(package_id)
             if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
                 if package_list[0]["content"] == "peer_addresses":
                     for package in package_list:
                         if package["part"] not in peer_addresses and package["part"] != my_address:
-                            peer_addresses.append(package["part"])
+                            peer_addresses.append(tuple(package["part"]))
                             return package_id
                         
                 elif package_list[0]["content"] == "messages_list":
@@ -131,7 +132,9 @@ def join_parts(parts_messages, my_address):
                         return package_id
 
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, peer_addresses, my_address):
+def receive_messages(udp_socket, my_address):
+
+    global peer_addresses
 
     parts_messages = {}  
 
@@ -189,29 +192,27 @@ def receive_messages(udp_socket, peer_addresses, my_address):
                             confirmation_messages[message_id] = [message_data]
                 
                 elif message_type == "Sync":
-                    print(message_data)
+                    
                     if "message_id" in message_data and "text" in message_data:
                         text_sync = message_data["text"]
                         if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
+                            print(text_sync) #Mostra na tela que o usuário ficou online
                             peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
                             message_list_peers_id = str(uuid.uuid4())
                             # Envie a lista de pares atual
                             for peer in peer_addresses:
-                                send_parts(udp_socket, peer_addresses, message_list_peers_id, "peer_addresses",peers_size, peer)
+                                send_parts(udp_socket, message_list_peers_id, "peer_addresses",peers_size, peer)
                             
                             # Gere um novo ID de mensagem
                             message_list_message_id = str(uuid.uuid4())
                             # Envie a lista de mensagens atual
                             for message in all_messages:
-                                send_parts(udp_socket, peer_addresses, message_list_message_id, "messages_list",peers_size, message)
-                            print("Enviei tudoooooo0")
+                                send_parts(udp_socket, message_list_message_id, "messages_list",peers_size, message)
 
                 elif message_type == "SyncP":
-                    print(message_data)
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
                         message_id = message_data["message_id"]
-
                         # Verifica se existe uma chave para a parte da mensagem e cria caso não exista
                         message_part_exists = parts_messages.get(message_id)
                         if message_part_exists is not None:
@@ -259,7 +260,7 @@ def read_messages():
     all_messages_sorted = order_messages(all_messages)
     print("\nTodas as mensagens: ")
     for message_data in all_messages_sorted:
-        print(f"{message_data['text']}")
+        print(f"-{message_data['sender']}: {message_data['text']}")
     print()
 
 # Função para limpar o terminal independente do S.O
@@ -273,7 +274,6 @@ def clear_terminal():
 # Função principal
 def main():
 
-    global all_messages_sorted
     global peer_addresses
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -287,12 +287,12 @@ def main():
     udp_socket.bind((my_ip, my_port))
 
     # Crie uma thread para receber mensagens
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, peer_addresses, (my_ip, my_port)))
+    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port)))
     receive_thread.start()
 
     # Crie uma thread para informar que está online
     message_text = f"{my_ip} is online"
-    sync_messages_thread = threading.Thread(target=sync_messages, args=(udp_socket, peer_addresses, message_text))
+    sync_messages_thread = threading.Thread(target=sync_messages, args=(udp_socket, message_text))
     sync_messages_thread.start()
 
     while True:
@@ -321,7 +321,7 @@ def main():
 
         elif menu_main == 2:
             # Inicie a thread de envio de mensagens na thread principal
-            send_messages(udp_socket, peer_addresses, my_ip)
+            send_messages(udp_socket, my_ip)
             clear_terminal()
 
         elif menu_main == 3:
