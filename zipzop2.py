@@ -118,18 +118,19 @@ def join_parts(parts_messages, my_address):
     global all_messages
 
     for package_id in parts_messages:
-            package_list = parts_messages.get(package_id)
-            if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
-                if package_list[0]["content"] == "peer_addresses":
-                    for package in package_list:
-                        if package["part"] not in peer_addresses and package["part"] != my_address:
-                            peer_addresses.append(tuple(package["part"]))
-                            return package_id
-                        
-                elif package_list[0]["content"] == "messages_list":
-                    for package in package_list:
+        package_list = parts_messages.get(package_id)
+        if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
+            if package_list[0]["content"] == "peer_addresses":
+                for package in package_list:
+                    if package["part"] not in peer_addresses and package["part"] != my_address:
+                        peer_addresses.append(tuple(package["part"]))
+                    
+            elif package_list[0]["content"] == "messages_list":
+                print(package_list)
+                for package in package_list:
+                    if package["part"] not in all_messages:
                         all_messages.append(package["part"])
-                        return package_id
+        return package_id
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address):
@@ -219,6 +220,8 @@ def receive_messages(udp_socket, my_address):
                             parts_messages[message_id].append(message_data)
                         else:
                             parts_messages[message_id] = [message_data]
+                        
+                        print("QQQQQ",message_data )
                         
         except socket.timeout:
             pass
