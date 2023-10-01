@@ -128,9 +128,8 @@ def join_parts(parts_messages, my_address):
             elif package_list[0]["content"] == "messages_list":
                 for package in package_list:
                     if package["part"] not in all_messages:
-                        message_att = package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
-                        print("MEUZOVO", message_att)
-                        all_messages.append(message_att)
+                        package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
+                        all_messages.append(package["part"])
         return package_id
 
 # Função para receber mensagens em formato JSON
