@@ -325,11 +325,11 @@ def main():
     global peer_addresses
 
     # Gerar um par de chaves RSA
-    key = RSA.generate(2048)
+    key = RSA.generate(512)
 
     # Exportar a chave pública e privada para arquivos
     private_key = key.export_key()
-    public_key = key.publickey().export_key()
+    public_key = key.publickey().export_key().decode('utf-8')
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
