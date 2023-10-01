@@ -220,14 +220,13 @@ def receive_messages(udp_socket, my_address):
                             confirmation_messages[message_id].append(message_data)
                         else:
                             confirmation_messages[message_id] = [message_data]
-                    
-                    # Remover o pacote confirmado do dicionário
-                    if message_id in unconfirmed_packets:
-                        del unconfirmed_packets[message_id]
-                        print("CUUUUUUUU", unconfirmed_packets)
-                
+                        
+                        for message in all_messages:
+                            if message["message_id"] == message_id: #Verifica se a mensagem já está na lista e remove o pacote confirmado do dicionário
+                                if message_data["message_id"] in unconfirmed_packets:
+                                    del unconfirmed_packets[message_data["message_id"]]
+
                 elif message_type == "Sync":
-                    
                     if "message_id" in message_data and "text" in message_data:
                         text_sync = message_data["text"]
                         if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
@@ -237,13 +236,13 @@ def receive_messages(udp_socket, my_address):
                             message_list_peers_id = str(uuid.uuid4())
                             # Envie a lista de pares atual
                             for peer in peer_addresses:
-                                send_parts(udp_socket, message_list_peers_id, "peer_addresses",peers_size, peer, my_address)
+                                send_parts(udp_socket, message_list_peers_id, "peer_addresses", peers_size, peer, my_address)
                             
                             # Gere um novo ID de mensagem
                             message_list_message_id = str(uuid.uuid4())
                             # Envie a lista de mensagens atual
                             for message in all_messages:
-                                send_parts(udp_socket, message_list_message_id, "messages_list",peers_size, message, my_address)
+                                send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -254,15 +253,15 @@ def receive_messages(udp_socket, my_address):
                             parts_messages[message_id].append(message_data)
                         else:
                             parts_messages[message_id] = [message_data]
+
+                        confirmation_message = {
+                            "message_type": "Confirmation",
+                            "message_id": message_id
+                        }
+
+                        addr_confirmation = message_data["sender"]
+                        udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), tuple(addr_confirmation))
                     
-                    confirmation_message = {
-                                "message_type": "Confirmation",
-                                "message_id": message_id
-                            }
-                    
-                    addr_confirmation = message_data["sender"]
-                    udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), tuple(addr_confirmation))
-                        
         except socket.timeout:
             pass
 
@@ -320,7 +319,7 @@ def main():
     global peer_addresses
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.settimeout(5)  # Define um timeout de 2 segundos
+    udp_socket.settimeout(2)  # Define um timeout de 2 segundos
 
     try:
         clear_terminal()
@@ -334,10 +333,9 @@ def main():
         receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port)))
         receive_thread.start()
 
-        # Crie uma thread para informar que está online
+        # Informe que está online
         message_text = f"{my_ip} is online"
-        sync_messages_thread = threading.Thread(target=sync_messages, args=(udp_socket, message_text))
-        sync_messages_thread.start()
+        sync_messages(udp_socket, message_text)
 
         while True:
             print("[1] Para adicionar participantes a um grupo")
