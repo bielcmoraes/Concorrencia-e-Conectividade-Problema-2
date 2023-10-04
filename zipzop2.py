@@ -128,7 +128,7 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            print("PUBLIC KEY", public_keys[str(peer_addr)])
+            print("PUBLIC KEY", public_keys)
             encrypted_message = encrypt_message(message_json, public_keys[str(peer_addr)])
             udp_socket.sendto(encrypted_message, peer_addr)
 
@@ -270,13 +270,13 @@ def main():
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption()
-    ).decode('utf-8')
+    )
 
     public_key = private_key.public_key()
     public_key_str = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
-    ).decode('utf-8')
+    )
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
@@ -290,7 +290,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_str))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str.decode('utf-8'), public_key_str.decode('utf-8')))
         receive_thread.start()
 
         # Iniciar a thread para lidar com as confirmações
@@ -298,8 +298,10 @@ def main():
         confirmation_thread.start()
 
         # Informe que está online
-        message_text = f"{(my_ip, my_port)} is online. Key: {public_key_str}"
+        message_text = f"{(my_ip, my_port)} is online."
         sync_messages(udp_socket, message_text, my_ip, my_port)
+        for peer in peer_addresses:
+            udp_socket.sendto(public_key_str, peer)
 
         while True:
             print("[1] Para adicionar participantes a um grupo")
