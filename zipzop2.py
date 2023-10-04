@@ -180,7 +180,7 @@ def join_parts(parts_messages, my_address):
         return package_id
 
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, my_address, private_key):
+def receive_messages(udp_socket, my_address, private_key, public_key):
 
     global peer_addresses
     global unconfirmed_packets
@@ -257,12 +257,26 @@ def receive_messages(udp_socket, my_address, private_key):
                             peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
                             message_list_peers_id = str(uuid.uuid4())
+
+                            public_key_text = f"Public key: {public_key}"
+                            # Crie um dicionário para a mensagem em formato JSON
+                            message_public_key = {
+                                "message_type": "Sync",
+                                "message_id": message_id,
+                                "text": public_key_text
+                            }
+
+                            # Envie a chave pública para o par que informou que está online
+                            for peer in peer_addresses:
+                                udp_socket.sendto(json.dumps(message_public_key).encode('utf-8'), peer)
+
                             # Envie a lista de pares atual
                             for peer in peer_addresses:
                                 send_parts(udp_socket, message_list_peers_id, "peer_addresses", peers_size, peer, my_address)
                             
                             # Gere um novo ID de mensagem
                             message_list_message_id = str(uuid.uuid4())
+
                             # Envie a lista de mensagens atual
                             for message in all_messages:
                                 send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
@@ -275,7 +289,11 @@ def receive_messages(udp_socket, my_address, private_key):
 
                             # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
                             public_keys[ip_value] = public_key
-
+                        
+                        elif "Public key:" in text_sync: # Atualiza a chave pública do par
+                            public_key_new = text_sync.split("Public key: ")[1]
+                            print("CHAVE PUBLICA NOVA:", public_key_new)
+                            public_keys[addr] = public_key_new
 
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
@@ -370,7 +388,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key, public_key))
         receive_thread.start()
 
         # Informe que está online
