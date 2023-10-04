@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 
 # Lista de pares participantes do grupo
-peer_addresses = [("192.168.0.127", 4444)]
+peer_addresses = []
 
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
@@ -88,6 +88,18 @@ def decrypt_message(encrypted_message, private_key_str):
     )
     return decrypted_message.decode('utf-8')
 
+# Trata a confirmação de mensagens
+def handle_confirmations():
+    global unconfirmed_packets
+    global confirmation_messages
+
+    while True:
+        for message_id in list(unconfirmed_packets.keys()):
+            if message_id in confirmation_messages:
+                del unconfirmed_packets[message_id]
+                del confirmation_messages[message_id]
+        time.sleep(1)
+
 # Função para enviar mensagens
 def send_messages(udp_socket, my_ip, my_port):
     global peer_addresses
@@ -117,14 +129,6 @@ def send_messages(udp_socket, my_ip, my_port):
         for peer_addr in peer_addresses:
             encrypted_message = encrypt_message(message_json, public_keys[peer_addr])
             udp_socket.sendto(encrypted_message, peer_addr)
-
-        # Aguarde a confirmação de entrega
-        confirmation_received = False
-        while not confirmation_received:
-            if message_id in confirmation_messages:
-                confirmation_received = True
-                del confirmation_messages[message_id]
-            time.sleep(1)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
@@ -183,6 +187,9 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
         except socket.timeout:
             pass
+        except OSError as e:
+            print(f"Ocorreu um erro de soquete: {str(e)}")
+            break  # Encerre a thread quando ocorrer um erro de soquete
 
 # Função para ordenar mensagens com base no "message_id"
 def order_messages(unordered_messages):
@@ -204,6 +211,7 @@ def clear_terminal():
     else:
         os.system("clear")
 
+# Função principal
 # Função principal
 def main():
     global peer_addresses
@@ -242,6 +250,10 @@ def main():
         receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_str))
         receive_thread.start()
 
+        # Iniciar a thread para lidar com as confirmações
+        confirmation_thread = threading.Thread(target=handle_confirmations)
+        confirmation_thread.start()
+
         # Informe que está online
         message_text = f"{my_ip}:{my_port} is online. Key: {public_key_str}"
         sync_messages(udp_socket, message_text, my_ip, my_port)
@@ -269,7 +281,7 @@ def main():
                 clear_terminal()
 
             elif menu_main == 2:
-                # Inicie a thread de envio de mensagens na thread principal
+                # Inicie a função send_messages na thread principal
                 send_messages(udp_socket, my_ip, my_port)
                 clear_terminal()
 
@@ -287,3 +299,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
