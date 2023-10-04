@@ -7,11 +7,9 @@ import json
 import time
 from Cryptodome.Cipher import PKCS1_OAEP
 from Cryptodome.PublicKey import RSA
-from Cryptodome.Random import get_random_bytes
-
 
 # Lista de pares participantes do grupo
-peer_addresses = [("192.168.0.127", 4444)] # Pode e deve adicionar participantes manualmente ao grupo 
+peer_addresses = [("192.168.0.127", 4444)]  # Pode e deve adicionar participantes manualmente ao grupo
 public_keys = {}
 
 # Lista global para armazenar todas as mensagens
@@ -23,6 +21,7 @@ confirmation_messages = {}
 
 # Dicionário para rastrear pacotes não confirmados e seus horários de envio
 unconfirmed_packets = {}
+
 
 # Função para sincronizar mensagens
 def sync_messages(udp_socket, message_text):
@@ -46,6 +45,7 @@ def sync_messages(udp_socket, message_text):
     for peer_addr in peer_addresses:
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
+
 # Função para reenviar pacotes não confirmados
 def resend_unconfirmed_packets(udp_socket):
 
@@ -61,7 +61,9 @@ def resend_unconfirmed_packets(udp_socket):
                 packet_data = unconfirmed_packets.pop(message_id)
                 udp_socket.sendto(packet_data["packet"], packet_data["address"])
                 # Atualize o horário de envio
-                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
+                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"],
+                                                    "send_time": time.time()}
+
 
 # Função para enviar mensagens em partes
 def send_parts(udp_socket, id, content, size, part, my_ip):
@@ -86,13 +88,17 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
         # Adicione o pacote não confirmado ao dicionário
-        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr,
+                                    "send_time": time.time()}
+
 
 # Função para criptografar uma mensagem com a chave pública
 def encrypt_message(message, public_key):
+    public_key = RSA.import_key(public_key)
     cipher = PKCS1_OAEP.new(public_key)
     encrypted_message = cipher.encrypt(message.encode('utf-8'))
     return encrypted_message
+
 
 # Função para descriptografar uma mensagem com a chave privada
 def decrypt_message(encrypted_message, private_key):
@@ -100,6 +106,7 @@ def decrypt_message(encrypted_message, private_key):
     cipher = PKCS1_OAEP.new(private_key)
     decrypted_message = cipher.decrypt(encrypted_message)
     return decrypted_message.decode('utf-8')
+
 
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
@@ -136,10 +143,10 @@ def send_messages(udp_socket, my_ip):
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
             for peer in public_keys:
-                if peer_addr == peer: #Verifica se o par enviou a chave pública para criptografia
+                if peer_addr == peer:  # Verifica se o par enviou a chave pública para criptografia
                     public_key = public_keys.get(peer)
                     message_encrypt = encrypt_message(message_json, public_key)
-                    udp_socket.sendto(message_encrypt.encode('utf-8'), peer_addr)
+                    udp_socket.sendto(message_encrypt, peer_addr)
 
             # Crie um dicionário para a confirmação em formato JSON
             confirmation_data = {
@@ -158,26 +165,28 @@ def send_messages(udp_socket, my_ip):
         if message_data not in all_messages:
             all_messages.append(message_data)
 
+
 # função para juntar as partes das mensagens no local adequado
 def join_parts(parts_messages, my_address):
-    
+
     global peer_addresses
     global all_messages
 
     for package_id in parts_messages:
         package_list = parts_messages.get(package_id)
-        if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
+        if len(package_list) == package_list[0]["size"]:  # Verifica se todas as partes chegaram
             if package_list[0]["content"] == "peer_addresses":
                 for package in package_list:
                     if package["part"] not in peer_addresses and package["part"] != my_address:
                         peer_addresses.append(tuple(package["part"]))
-                    
+
             elif package_list[0]["content"] == "messages_list":
                 for package in package_list:
                     if package["part"] not in all_messages:
-                        package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
+                        package["part"]["message_type"] = "Message"  # Altera o tipo do pacote para evitar bugs
                         all_messages.append(package["part"])
-        return package_id
+            return package_id
+
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key, public_key):
@@ -186,10 +195,10 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
     global unconfirmed_packets
     global public_keys
 
-    parts_messages = {}  
+    parts_messages = {}
 
     while True:
-        
+
         package_id = join_parts(parts_messages, my_address)
         if package_id is not None:
             parts_messages.pop(package_id)
@@ -199,7 +208,7 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
 
             data_decrypt = decrypt_message(data, private_key)
 
-            message_json = data_decrypt.decode('utf-8')
+            message_json = data_decrypt
 
             # Desserializar a mensagem JSON
             message_data = json.loads(message_json)
@@ -209,7 +218,7 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                 if message_type == "Message":
                     if "message_id" in message_data and "text" in message_data:
                         message_id = message_data["message_id"]
-                        
+
                         # Armazena a mensagem na lista desordenada
                         if message_data not in all_messages:
                             all_messages.append(message_data)
@@ -244,16 +253,16 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                             confirmation_messages[message_id].append(message_data)
                         else:
                             confirmation_messages[message_id] = [message_data]
-                        
+
                         for message in all_messages:
-                            if message["message_id"] == message_id: #Verifica se a mensagem já está na lista e remove o pacote confirmado do dicionário
+                            if message["message_id"] == message_id:  # Verifica se a mensagem já está na lista e remove o pacote confirmado do dicionário
                                 if message_data["message_id"] in unconfirmed_packets:
                                     del unconfirmed_packets[message_data["message_id"]]
 
                 elif message_type == "Sync":
                     if "message_id" in message_data and "text" in message_data:
                         text_sync = message_data["text"]
-                        if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
+                        if "is online" in text_sync:  # Envia a lista de pares atualizada e a lista de mensagens
                             peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
                             message_list_peers_id = str(uuid.uuid4())
@@ -273,26 +282,26 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                             # Envie a lista de pares atual
                             for peer in peer_addresses:
                                 send_parts(udp_socket, message_list_peers_id, "peer_addresses", peers_size, peer, my_address)
-                            
+
                             # Gere um novo ID de mensagem
                             message_list_message_id = str(uuid.uuid4())
 
                             # Envie a lista de mensagens atual
                             for message in all_messages:
-                                send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
-                            
+                                send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message,
+                                           my_address)
+
                             # Pegar address do usuário que ficou online
                             ip_value = text_sync.split(" is online. Key: ")[0]
 
                             # Pegar a chave pública do usuário que ficou online
-                            public_key = text_sync.split("Key:", 1)
+                            public_key = text_sync.split("Key:", 1)[1]
 
                             # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
                             public_keys[ip_value] = public_key
-                        
-                        elif "Public key:" in text_sync: # Atualiza a chave pública do par
+
+                        elif "Public key:" in text_sync:  # Atualiza a chave pública do par
                             public_key_new = text_sync.split("Public key: ")[1]
-                            print("CHAVE PUBLICA NOVA:", public_key_new)
                             public_keys[addr] = public_key_new
 
                 elif message_type == "SyncP":
@@ -312,9 +321,10 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
 
                         addr_confirmation = message_data["sender"]
                         udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), tuple(addr_confirmation))
-                    
+
         except socket.timeout:
             pass
+
 
 # Função para ordenar mensagens com base no "last_message_id"
 def order_messages(unordered_messages):
@@ -348,6 +358,7 @@ def order_messages(unordered_messages):
 
     return ordered_messages
 
+
 # Função para ler todas as mensagens
 def read_messages():
     all_messages_sorted = order_messages(all_messages)
@@ -356,6 +367,7 @@ def read_messages():
         print(f"-{message_data['sender']}: {message_data['text']}")
     print()
 
+
 # Função para limpar o terminal independente do S.O
 def clear_terminal():
     current_os = platform.system()
@@ -363,6 +375,7 @@ def clear_terminal():
         os.system("cls")
     else:
         os.system("clear")
+
 
 # Função principal
 def main():
@@ -388,7 +401,8 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key, public_key))
+        receive_thread = threading.Thread(target=receive_messages,
+                                          args=(udp_socket, (my_ip, my_port), private_key, public_key))
         receive_thread.start()
 
         # Informe que está online
@@ -415,7 +429,8 @@ def main():
                 # Enviar para todos os pares que alguém foi adicionado ao grupo
                 for peer in peer_addresses:
                     message_text = f"{my_ip} added {peer} to the group"
-                    create_group_thread = threading.Thread(target=sync_messages, args=(udp_socket, [peer], message_text))
+                    create_group_thread = threading.Thread(target=sync_messages,
+                                                          args=(udp_socket, [peer], message_text))
                     create_group_thread.start()
                 clear_terminal()
 
@@ -435,6 +450,7 @@ def main():
         print(f"Error: {str(e)}")
     finally:
         udp_socket.close()
+
 
 if __name__ == "__main__":
     main()
