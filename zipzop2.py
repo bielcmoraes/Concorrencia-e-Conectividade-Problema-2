@@ -128,7 +128,7 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            print("DDDDDDDDDD", public_keys)
+            print("DDDDDDDDDD", peer_addr)
             encrypted_message = encrypt_message(message_json, public_keys[peer_addr])
             udp_socket.sendto(encrypted_message, peer_addr)
 
@@ -185,6 +185,9 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                             else:
                                 confirmation_messages[message_id] = [message_data]
             except ValueError:
+                message_json = data.decode('utf-8')
+                # Desserializar a mensagem JSON
+                message_data = json.loads(message_json)
                 message_type = message_data["message_type"]
                 if message_type == "Sync":
                     if "message_id" in message_data and "text" in message_data:
@@ -192,14 +195,14 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                         if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
                             peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
-                            message_list_peers_id = str(uuid.uuid4())
+                            public_key_id = str(uuid.uuid4())
 
-                            public_key_text = f"Public key: {public_key}"
+                            public_key_text = f"Public key: {public_key_str}"
 
                             # Crie um dicionário para a mensagem em formato JSON
                             message_public_key = {
                                 "message_type": "Sync",
-                                "message_id": message_id,
+                                "message_id": public_key_id,
                                 "text": public_key_text
                             }
 
@@ -208,11 +211,11 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                                 udp_socket.sendto(json.dumps(message_public_key).encode('utf-8'), peer)
                             
                             # Pegar address do usuário que ficou online
-                            ip_value = text_sync.split(" is online. Key: ")[0]
+                            ip_value = text_sync.split(" is online.")[0]
 
+                            print("IPIKAAAAA", ip_value)
                             # Pegar a chave pública do usuário que ficou online
-                            public_key = text_sync.split("Key:", 1)
-
+                            public_key = text_sync.split("Key: ")[1]
                             # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
                             public_keys[ip_value] = public_key
                         
@@ -290,7 +293,7 @@ def main():
         confirmation_thread.start()
 
         # Informe que está online
-        message_text = f"{my_ip}:{my_port} is online. Key: {public_key_str}"
+        message_text = f"{(my_ip, my_port)} is online. Key: {public_key_str}"
         sync_messages(udp_socket, message_text, my_ip, my_port)
 
         while True:
