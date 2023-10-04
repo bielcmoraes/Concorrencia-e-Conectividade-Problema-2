@@ -5,8 +5,10 @@ import os
 import platform
 import json
 import time
-from Cryptodome.Cipher import PKCS1_OAEP
-from Cryptodome.PublicKey import RSA
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import padding as sym_padding
 
 # Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.127", 4444)]  # Pode e deve adicionar participantes manualmente ao grupo
@@ -21,7 +23,6 @@ confirmation_messages = {}
 
 # Dicionário para rastrear pacotes não confirmados e seus horários de envio
 unconfirmed_packets = {}
-
 
 # Função para sincronizar mensagens
 def sync_messages(udp_socket, message_text):
@@ -45,7 +46,6 @@ def sync_messages(udp_socket, message_text):
     for peer_addr in peer_addresses:
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
-
 # Função para reenviar pacotes não confirmados
 def resend_unconfirmed_packets(udp_socket):
 
@@ -61,9 +61,7 @@ def resend_unconfirmed_packets(udp_socket):
                 packet_data = unconfirmed_packets.pop(message_id)
                 udp_socket.sendto(packet_data["packet"], packet_data["address"])
                 # Atualize o horário de envio
-                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"],
-                                                    "send_time": time.time()}
-
+                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
 
 # Função para enviar mensagens em partes
 def send_parts(udp_socket, id, content, size, part, my_ip):
@@ -88,25 +86,33 @@ def send_parts(udp_socket, id, content, size, part, my_ip):
         udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
 
         # Adicione o pacote não confirmado ao dicionário
-        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr,
-                                    "send_time": time.time()}
-
+        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
 
 # Função para criptografar uma mensagem com a chave pública
-def encrypt_message(message, public_key):
-    public_key = RSA.import_key(public_key)
-    cipher = PKCS1_OAEP.new(public_key)
-    encrypted_message = cipher.encrypt(message.encode('utf-8'))
+def encrypt_message(message, public_key_str):
+    public_key = serialization.load_pem_public_key(public_key_str.encode('utf-8'))
+    encrypted_message = public_key.encrypt(
+        message.encode('utf-8'),
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
     return encrypted_message
 
-
 # Função para descriptografar uma mensagem com a chave privada
-def decrypt_message(encrypted_message, private_key):
-    private_key = RSA.import_key(private_key)
-    cipher = PKCS1_OAEP.new(private_key)
-    decrypted_message = cipher.decrypt(encrypted_message)
+def decrypt_message(encrypted_message, private_key_str):
+    private_key = serialization.load_pem_private_key(private_key_str.encode('utf-8'), password=None)
+    decrypted_message = private_key.decrypt(
+        encrypted_message,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
     return decrypted_message.decode('utf-8')
-
 
 # Função para enviar mensagens em segundo plano
 def send_messages(udp_socket, my_ip):
@@ -165,7 +171,6 @@ def send_messages(udp_socket, my_ip):
         if message_data not in all_messages:
             all_messages.append(message_data)
 
-
 # função para juntar as partes das mensagens no local adequado
 def join_parts(parts_messages, my_address):
 
@@ -187,9 +192,8 @@ def join_parts(parts_messages, my_address):
                         all_messages.append(package["part"])
             return package_id
 
-
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, my_address, private_key, public_key):
+def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
     global peer_addresses
     global unconfirmed_packets
@@ -206,9 +210,9 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
         try:
             data, addr = udp_socket.recvfrom(1024)
 
-            data_decrypt = decrypt_message(data, private_key)
+            data_decrypt = decrypt_message(data, private_key_str)
 
-            message_json = data_decrypt
+            message_json = data_decrypt.decode('utf-8')
 
             # Desserializar a mensagem JSON
             message_data = json.loads(message_json)
@@ -267,7 +271,7 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                             # Gere um novo ID de mensagem
                             message_list_peers_id = str(uuid.uuid4())
 
-                            public_key_text = f"Public key: {public_key}"
+                            public_key_text = f"Public key: {public_key_str}"
                             # Crie um dicionário para a mensagem em formato JSON
                             message_public_key = {
                                 "message_type": "Sync",
@@ -295,13 +299,14 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                             ip_value = text_sync.split(" is online. Key: ")[0]
 
                             # Pegar a chave pública do usuário que ficou online
-                            public_key = text_sync.split("Key:", 1)[1]
+                            public_key = text_sync.split("Key:", 1)
 
                             # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
                             public_keys[ip_value] = public_key
 
                         elif "Public key:" in text_sync:  # Atualiza a chave pública do par
                             public_key_new = text_sync.split("Public key: ")[1]
+                            print("CHAVE PUBLICA NOVA:", public_key_new)
                             public_keys[addr] = public_key_new
 
                 elif message_type == "SyncP":
@@ -324,7 +329,6 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
 
         except socket.timeout:
             pass
-
 
 # Função para ordenar mensagens com base no "last_message_id"
 def order_messages(unordered_messages):
@@ -358,7 +362,6 @@ def order_messages(unordered_messages):
 
     return ordered_messages
 
-
 # Função para ler todas as mensagens
 def read_messages():
     all_messages_sorted = order_messages(all_messages)
@@ -366,7 +369,6 @@ def read_messages():
     for message_data in all_messages_sorted:
         print(f"-{message_data['sender']}: {message_data['text']}")
     print()
-
 
 # Função para limpar o terminal independente do S.O
 def clear_terminal():
@@ -376,18 +378,29 @@ def clear_terminal():
     else:
         os.system("clear")
 
-
 # Função principal
 def main():
 
     global peer_addresses
 
     # Gerar um par de chaves RSA
-    key = RSA.generate(1024)
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=1024
+    )
 
     # Exportar as chaves pública e privada
-    private_key = key.export_key().decode('utf-8')
-    public_key = key.publickey().export_key().decode('utf-8')
+    private_key_str = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode('utf-8')
+
+    public_key = private_key.public_key()
+    public_key_str = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    ).decode('utf-8')
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
@@ -401,12 +414,11 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages,
-                                          args=(udp_socket, (my_ip, my_port), private_key, public_key))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_str))
         receive_thread.start()
 
         # Informe que está online
-        message_text = f"{(my_ip, my_port)} is online. Key: {public_key}"
+        message_text = f"{(my_ip, my_port)} is online. Key: {public_key_str}"
         sync_messages(udp_socket, message_text)
 
         while True:
@@ -429,8 +441,7 @@ def main():
                 # Enviar para todos os pares que alguém foi adicionado ao grupo
                 for peer in peer_addresses:
                     message_text = f"{my_ip} added {peer} to the group"
-                    create_group_thread = threading.Thread(target=sync_messages,
-                                                          args=(udp_socket, [peer], message_text))
+                    create_group_thread = threading.Thread(target=sync_messages, args=(udp_socket, [peer], message_text))
                     create_group_thread.start()
                 clear_terminal()
 
@@ -450,7 +461,6 @@ def main():
         print(f"Error: {str(e)}")
     finally:
         udp_socket.close()
-
 
 if __name__ == "__main__":
     main()
