@@ -4,57 +4,149 @@ import uuid
 import os
 import platform
 import json
-from collections import Counter
+import time
+from Cryptodome.Cipher import PKCS1_OAEP
+from Cryptodome.PublicKey import RSA
+from Cryptodome.Random import get_random_bytes
 
-# Cria um Lock
-bloqued = threading.Lock()
+
+# Lista de pares participantes do grupo
+peer_addresses = [("192.168.0.127", 4444)] # Pode e deve adicionar participantes manualmente ao grupo 
+public_keys = {}
 
 # Lista global para armazenar todas as mensagens
 all_messages = []
 all_messages_sorted = []
 
+# Dicionário para armazenar as confirmações de mensagens
 confirmation_messages = {}
 
-# Função para contar o votos em uma lista e retornar o vencedor
-def counts_votes(votes):
-    vote_count = Counter(votes) 
-    max_votes = max(vote_count.values()) 
-    lst = [i for i in vote_count.keys() if vote_count[i] == max_votes]
-    winner = sorted(lst)[0]
-    return winner
+# Dicionário para rastrear pacotes não confirmados e seus horários de envio
+unconfirmed_packets = {}
 
-# Função para enviar mensagens em formato JSON
-def send_messages(udp_socket, peer_addresses, message_ids):
+# Função para sincronizar mensagens
+def sync_messages(udp_socket, message_text):
+
+    global peer_addresses
+
+    # Gere um novo ID de mensagem
+    message_id = str(uuid.uuid4())
+
+    # Crie um dicionário para a mensagem em formato JSON
+    message_data = {
+        "message_type": "Sync",
+        "message_id": message_id,
+        "text": message_text
+    }
+
+    # Serializar a mensagem em JSON
+    message_json = json.dumps(message_data)
+
+    # Enviar a mensagem para todos os pares
+    for peer_addr in peer_addresses:
+        udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
+
+# Função para reenviar pacotes não confirmados
+def resend_unconfirmed_packets(udp_socket):
+
+    global unconfirmed_packets
+
     while True:
-        message_text = input("Digite a mensagem a ser enviada (ou 'exit' para sair): ")
-        
+        time.sleep(3)  # Verificar a cada 5 segundos
+
+        for message_id, send_time in list(unconfirmed_packets.items()):
+            # Verifique se o tempo desde o envio excedeu um limite (por exemplo, 10 segundos)
+            if time.time() - send_time > 5:
+                # Reenvie o pacote correspondente
+                packet_data = unconfirmed_packets.pop(message_id)
+                udp_socket.sendto(packet_data["packet"], packet_data["address"])
+                # Atualize o horário de envio
+                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
+
+# Função para enviar mensagens em partes
+def send_parts(udp_socket, id, content, size, part, my_ip):
+
+    global peer_addresses
+
+    # Crie um dicionário para a mensagem em formato JSON
+    message_data = {
+        "message_type": "SyncP",
+        "message_id": id,
+        "sender": my_ip,
+        "content": content,
+        "size": size,
+        "part": part
+    }
+
+    # Serializar a mensagem em JSON
+    message_json = json.dumps(message_data)
+
+    # Enviar a mensagem para todos os pares
+    for peer_addr in peer_addresses:
+        udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
+
+        # Adicione o pacote não confirmado ao dicionário
+        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+
+# Função para criptografar uma mensagem com a chave pública
+def encrypt_message(message, public_key):
+    cipher = PKCS1_OAEP.new(public_key)
+    encrypted_message = cipher.encrypt(message.encode('utf-8'))
+    return encrypted_message
+
+# Função para descriptografar uma mensagem com a chave privada
+def decrypt_message(encrypted_message, private_key):
+    print("PRIVADA:", private_key)
+    private_key = RSA.import_key(private_key)
+    cipher = PKCS1_OAEP.new(private_key)
+    decrypted_message = cipher.decrypt(encrypted_message)
+    return decrypted_message.decode('utf-8')
+
+# Função para enviar mensagens em segundo plano
+def send_messages(udp_socket, my_ip):
+
+    global peer_addresses
+
+    while True:
+        message_text = input("Digite as mensagens (ou 'exit' para sair): ")
+
         if message_text.lower() == 'exit':
             break
-        
+
         # Gere um novo ID de mensagem
         message_id = str(uuid.uuid4())
-        message_ids.add(message_id)
+
+        # Verifique a posição da mensagem na lista
+        if len(all_messages) == 0:
+            last_message_id = "first"
+        else:
+            last_message_id = all_messages[-1]["message_id"]
 
         # Crie um dicionário para a mensagem em formato JSON
         message_data = {
             "message_type": "Message",
             "message_id": message_id,
-            "text": message_text
+            "sender": my_ip,
+            "text": message_text,
+            "last_message_id": last_message_id
         }
 
         # Serializar a mensagem em JSON
         message_json = json.dumps(message_data)
-        
+
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
-
-            last_message_id = "first" if len(all_messages) == 0 and len(all_messages_sorted) == 0 else all_messages[-1]["message_id"]
+            for peer in public_keys:
+                if peer_addr == peer: #Verifica se o par enviou a chave pública para criptografia
+                    public_key = public_keys.get(peer)
+                    message_encrypt = encrypt_message(message_json, public_key)
+                    udp_socket.sendto(message_encrypt.encode('utf-8'), peer_addr)
 
             # Crie um dicionário para a confirmação em formato JSON
             confirmation_data = {
                 "message_type": "Confirmation",
                 "message_id": message_id,
+                "sender": my_ip,
                 "last_message_id": last_message_id
             }
 
@@ -64,21 +156,51 @@ def send_messages(udp_socket, peer_addresses, message_ids):
             # Envie a confirmação
             udp_socket.sendto(confirmation_json.encode('utf-8'), peer_addr)
 
-        # Armazenar mensagem na lista global
-        sent_message = {
-            "message_type": "Sent",
-            "message_id": message_id,
-            "sender": "You",
-            "text": message_text
-        }
-        all_messages.append(sent_message)
+        if message_data not in all_messages:
+            all_messages.append(message_data)
+
+# função para juntar as partes das mensagens no local adequado
+def join_parts(parts_messages, my_address):
+    
+    global peer_addresses
+    global all_messages
+
+    for package_id in parts_messages:
+        package_list = parts_messages.get(package_id)
+        if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
+            if package_list[0]["content"] == "peer_addresses":
+                for package in package_list:
+                    if package["part"] not in peer_addresses and package["part"] != my_address:
+                        peer_addresses.append(tuple(package["part"]))
+                    
+            elif package_list[0]["content"] == "messages_list":
+                for package in package_list:
+                    if package["part"] not in all_messages:
+                        package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
+                        all_messages.append(package["part"])
+        return package_id
 
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, message_ids, peer_addresses):
+def receive_messages(udp_socket, my_address, private_key, public_key):
+
+    global peer_addresses
+    global unconfirmed_packets
+    global public_keys
+
+    parts_messages = {}  
+
     while True:
+        
+        package_id = join_parts(parts_messages, my_address)
+        if package_id is not None:
+            parts_messages.pop(package_id)
+
         try:
             data, addr = udp_socket.recvfrom(1024)
-            message_json = data.decode('utf-8')
+
+            data_decrypt = decrypt_message(data, private_key)
+
+            message_json = data_decrypt.decode('utf-8')
 
             # Desserializar a mensagem JSON
             message_data = json.loads(message_json)
@@ -88,7 +210,10 @@ def receive_messages(udp_socket, message_ids, peer_addresses):
                 if message_type == "Message":
                     if "message_id" in message_data and "text" in message_data:
                         message_id = message_data["message_id"]
-                        message_text = message_data["text"]
+                        
+                        # Armazena a mensagem na lista desordenada
+                        if message_data not in all_messages:
+                            all_messages.append(message_data)
 
                         # Enviar confirmação de entrega da mensagem com o mesmo ID
                         if len(all_messages) != 0:
@@ -98,16 +223,9 @@ def receive_messages(udp_socket, message_ids, peer_addresses):
                                 "message_id": message_id,
                                 "last_message_id": last_message_id
                             }
+
                             udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr)
 
-                            # Armazenar mensagem na lista global
-                            received_message = {
-                                "message_type": "Received",
-                                "message_id": message_id,
-                                "sender": addr,
-                                "text": message_text
-                            }
-                            all_messages.append(received_message)
                         else:
                             # Se não houver mensagens anteriores, envie "first" como last_message_id
                             confirmation_message = {
@@ -117,212 +235,127 @@ def receive_messages(udp_socket, message_ids, peer_addresses):
                             }
                             udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr)
 
-                            # Armazenar mensagem na lista global
-                            received_message = {
-                                "message_type": "Received",
-                                "message_id": message_id,
-                                "sender": addr,
-                                "text": message_text
-                            }
-                            all_messages.append(received_message)
-
                 elif message_type == "Confirmation":
                     if "message_id" in message_data and "last_message_id" in message_data:
                         message_id = message_data["message_id"]
-                        position_message = message_data["last_message_id"]
-
                         # Adiciona ao dicionário de mensagens de confirmação
                         confirmation_messages_exists = confirmation_messages.get(message_id)
                         # Salva a posição de cada mensagem na lista de cada par
                         if confirmation_messages_exists is not None:
-                            confirmation_messages[message_id].append(position_message)
+                            confirmation_messages[message_id].append(message_data)
                         else:
-                            confirmation_messages[message_id] = [position_message]
-                        try:
-                            votes = confirmation_messages.get(message_id)  # Pega a lista de votos da mensagem a ser processada
-                            voted_position = counts_votes(votes)
-                            # voted_position = position_message
+                            confirmation_messages[message_id] = [message_data]
+                        
+                        for message in all_messages:
+                            if message["message_id"] == message_id: #Verifica se a mensagem já está na lista e remove o pacote confirmado do dicionário
+                                if message_data["message_id"] in unconfirmed_packets:
+                                    del unconfirmed_packets[message_data["message_id"]]
 
-                            if voted_position == "first":  # Verifica se é a primeira mensagem
-                                for message in all_messages:  # Verifica se a mensagem foi adicionada na lista de mensagens recebidas
-                                    if message["message_id"] == message_id:
-                                        all_messages_sorted.insert(0, message)
-
-                            else:
-                                for message in all_messages:
-                                    if message["message_id"] == message_id:  # Verifica se a mensagem foi adicionada na lista de mensagens recebidas
-                                        for message_sorted in all_messages_sorted:
-                                            if message_sorted["message_id"] == voted_position:  # Encontra a posição de inserção
-                                                position_isertion_message = all_messages_sorted.index(
-                                                    message_sorted) + 1  # Pega o índice da mensagem que eu quero inserir
-                                                all_messages_sorted.insert(position_isertion_message, message)
-                        except ValueError:
-                            print(f"Erro ao analisar o ID da confirmação: {message_id}")
-                
-                elif message_type == "SyncReq":
-                    if "start" in message_data and "size" in message_data:
-                        start = message_data["start"]
-                        size = message_data["size"]
-                        if start == "first" and size == 0:
+                elif message_type == "Sync":
+                    if "message_id" in message_data and "text" in message_data:
+                        text_sync = message_data["text"]
+                        if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
+                            peers_size = len(peer_addresses)
                             # Gere um novo ID de mensagem
-                            message_id = str(uuid.uuid4())
-                            # message_ids.add(message_id)
-                            size_package = len(all_messages)
+                            message_list_peers_id = str(uuid.uuid4())
+
+                            public_key_text = f"Public key: {public_key}"
+                            # Crie um dicionário para a mensagem em formato JSON
+                            message_public_key = {
+                                "message_type": "Sync",
+                                "message_id": message_id,
+                                "text": public_key_text
+                            }
+
+                            # Envie a chave pública para o par que informou que está online
+                            for peer in peer_addresses:
+                                udp_socket.sendto(json.dumps(message_public_key).encode('utf-8'), peer)
+
+                            # Envie a lista de pares atual
+                            for peer in peer_addresses:
+                                send_parts(udp_socket, message_list_peers_id, "peer_addresses", peers_size, peer, my_address)
+                            
+                            # Gere um novo ID de mensagem
+                            message_list_message_id = str(uuid.uuid4())
+
+                            # Envie a lista de mensagens atual
                             for message in all_messages:
+                                send_parts(udp_socket, message_list_message_id, "messages_list", peers_size, message, my_address)
+                            
+                            # Pegar address do usuário que ficou online
+                            ip_value = text_sync.split(" is online. Key: ")[0]
 
-                                # Crie um dicionário para a mensagem em formato JSON
-                                message_data = {
-                                    "message_type": "SyncRes",
-                                    "message_id": message_id,
-                                    "size": size_package,
-                                    "message": message
-                                }
+                            # Pegar a chave pública do usuário que ficou online
+                            public_key = text_sync.split("Key:", 1)
 
-                                # Serializar a mensagem em JSON
-                                message_json = json.dumps(message_data)
-                                
-                                # Enviar cada mensagem para todos os pares
-                                for peer_addr in peer_addresses:
-                                    udp_socket.sendto(message_json.encode('utf-8'), peer_addr) 
+                            # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
+                            public_keys[ip_value] = public_key
+                        
+                        elif "Public key:" in text_sync: # Atualiza a chave pública do par
+                            public_key_new = text_sync.split("Public key: ")[1]
+                            print("CHAVE PUBLICA NOVA:", public_key_new)
+                            public_keys[addr] = public_key_new
 
-        except socket.timeout:
-            pass
+                elif message_type == "SyncP":
+                    if "message_id" in message_data and "size" in message_data and "part" in message_data:
+                        message_id = message_data["message_id"]
+                        # Verifica se existe uma chave para a parte da mensagem e cria caso não exista
+                        message_part_exists = parts_messages.get(message_id)
+                        if message_part_exists is not None:
+                            parts_messages[message_id].append(message_data)
+                        else:
+                            parts_messages[message_id] = [message_data]
 
-# Função para solicitar a lista de mensagens ordenada atual de cada par
-def request_ordered_list(udp_socket, peer_addresses, my_ip):
-    
-    # Gere um novo ID de mensagem
-    message_id = str(uuid.uuid4())
+                        confirmation_message = {
+                            "message_type": "Confirmation",
+                            "message_id": message_id
+                        }
 
-    # Crie um dicionário para a mensagem em formato JSON
-    message_data = {
-        "message_type": "SyncReq",
-        "message_id": message_id,
-        "start": "first",
-        "size": 0
-    }
-
-    # Serializar a mensagem em JSON
-    message_json = json.dumps(message_data)
-    
-    # Enviar a mensagem para todos os pares
-    for peer_addr in peer_addresses:
-        udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
-    
-    udp_socket.settimeout(6) # Defina um timeout de 6s para o socket nessa função
-
-    updated_lists = []
-    # Criar a função que recebe vários pacotes e monta a lista de cada cliente.
-    while True:
-        try:
-            # Receber a lista de mensagens atualizada de todos os pares e adiciona na lista com todas as respostas
-            data, addr = udp_socket.recvfrom(1024)
-            updated_list = data.decode('utf-8')
-
-            updated_lists.append(updated_list)
-        
-        except socket.timeout:
-            break
-    
-    # updated_list_winner = full_sync(updated_lists)
-    return updated_list_winner
-
-# Falta adicionar a confirmação para verificar se todas as partes chegaram com sucesso
-def receive_parts(udp_socket, amout_parts):
-    
-    receive_parts_dict = {}
-    while True:
-        try:
-            data, addr = udp_socket.recvfrom(1024)
-            message_json = data.decode('utf-8')
-
-            # Desserializar a mensagem JSON
-            message_data = json.loads(message_json)
-            if "message_type" in message_data and "sender" in message_data:
-                message_type = message_data["message_type"]
-                sender = message_data["sender"]
-                message = message_data["message"]
-                if message_type == "SyncRes":
-                    sender_exists = receive_parts_dict.get(sender)
+                        addr_confirmation = message_data["sender"]
+                        udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), tuple(addr_confirmation))
                     
-                    #Cria uma chave no dicionário para cada remetente se não existir
-                    if sender_exists is not None:
-                                receive_parts_dict[sender] = []
-                                receive_parts_dict[sender].append(message)
-                    else:
-                        receive_parts_dict[sender].append(message)
-        except:
+        except socket.timeout:
             pass
 
-# Função para exibir mensagens de saída
-def display_output():
-    while True:
-        with bloqued:
-            user_input = input("Escolha uma opção:\n1. Enviar mensagem\n2. Ler mensagens\n3. Sair\nOpção: ")
-        if user_input == '1':
-            pass  # Continuar para enviar mensagens
-        elif user_input == '2':
-            read_messages()  # Chamar a função para ler mensagens
-        elif user_input == '3':
-            break
-        else:
-            with bloqued:
-                print("Opção inválida. Tente novamente.")
+# Função para ordenar mensagens com base no "last_message_id"
+def order_messages(unordered_messages):
+    # Função auxiliar para calcular a chave de ordenação
+    def sort_key(message):
+        last_message_id = message["last_message_id"]
+        message_id = message["message_id"]
+
+        # Converter as strings em UUIDs válidos
+        try:
+            last_message_id = uuid.UUID(last_message_id)
+        except ValueError:
+            last_message_id = uuid.UUID(int=0)  # Usar valor padrão se não for um UUID válido
+
+        try:
+            message_id = uuid.UUID(message_id)
+        except ValueError:
+            message_id = uuid.UUID(int=0)  # Usar valor padrão se não for um UUID válido
+
+        # Atribuir um valor especial para mensagens com "last_message_id" igual a "first"
+        if last_message_id == "first":
+            return (uuid.UUID(int=0), message_id)
+        elif last_message_id is None:
+            return (uuid.UUID(int=1), message_id)  # Usar outro UUID como valor especial
+        return (last_message_id, message_id)
+
+    # Filtrar mensagens com last_message_id igual a "first" e ordenar o restante
+    first_messages = [message for message in unordered_messages if message["last_message_id"] == "first"]
+    other_messages = [message for message in unordered_messages if message["last_message_id"] != "first"]
+    ordered_messages = first_messages + sorted(other_messages, key=sort_key)
+
+    return ordered_messages
 
 # Função para ler todas as mensagens
 def read_messages():
-    with bloqued:
-        print("\nTodas as mensagens:")
-        for message_data in all_messages_sorted:
-            print(f"{message_data['status']}. {message_data['text']} - De {message_data['sender']}")
-        print()
-
-# Função principal
-def main():
-
-    global all_messages_sorted
-    
-    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp_socket.settimeout(2)  # Define um timeout de 2 segundos
-
-    clear_terminal()
-
-    my_ip = input("Digite seu endereço IP: ")
-    my_port = int(input("Digite sua porta: "))
-
-    udp_socket.bind((my_ip, my_port))
-
-    num_peers = int(input("Quantos pares você deseja adicionar? "))
-    peer_addresses = []
-
-    for _ in range(num_peers):
-        peer_ip = input("Digite o endereço IP do par: ")
-        peer_port = int(input("Digite a porta do par: "))
-        peer_address = (peer_ip, peer_port)
-        peer_addresses.append(peer_address)
-    
-    clear_terminal()
-
-    message_ids = set()
-
-    # Crie threads para receber mensagens e exibir mensagens de saída
-    receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, message_ids, peer_addresses))
-    output_thread = threading.Thread(target=display_output)
-    
-    # Defina a thread de exibição de saída como daemon para que ela possa ser interrompida quando o programa for encerrado
-    output_thread.daemon = True
-
-    receive_thread.start()
-    output_thread.start()
-
-    # Solicite as listas ordenadas e atualizadas dos pares conectados
-    # all_messages_sorted = request_ordered_list()
-
-    # Inicie a thread de envio de mensagens na thread principal
-    send_messages(udp_socket, peer_addresses, message_ids)
-
-    # Feche o socket ao sair
-    udp_socket.close()
+    all_messages_sorted = order_messages(all_messages)
+    print("\nTodas as mensagens: ")
+    for message_data in all_messages_sorted:
+        print(f"-{message_data['sender']}: {message_data['text']}")
+    print()
 
 # Função para limpar o terminal independente do S.O
 def clear_terminal():
@@ -331,6 +364,78 @@ def clear_terminal():
         os.system("cls")
     else:
         os.system("clear")
+
+# Função principal
+def main():
+
+    global peer_addresses
+
+    # Gerar um par de chaves RSA
+    key = RSA.generate(1024)
+
+    # Exportar as chaves pública e privada
+    private_key = key.export_key().decode('utf-8')
+    public_key = key.publickey().export_key().decode('utf-8')
+
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp_socket.settimeout(2)  # Define um timeout de 2 segundos
+
+    try:
+        clear_terminal()
+
+        my_ip = input("Digite seu endereço IP: ")
+        my_port = int(input("Digite sua porta: "))
+
+        udp_socket.bind((my_ip, my_port))
+
+        # Crie uma thread para receber mensagens
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key, public_key))
+        receive_thread.start()
+
+        # Informe que está online
+        message_text = f"{(my_ip, my_port)} is online. Key: {public_key}"
+        sync_messages(udp_socket, message_text)
+
+        while True:
+            print("[1] Para adicionar participantes a um grupo")
+            print("[2] Para enviar mensagens")
+            print("[3] Para visualizar mensagens")
+            print("[4] Para sair")
+
+            menu_main = int(input())
+
+            if menu_main == 1:
+                num_peers = int(input("Quantos participantes deseja adicionar no grupo?"))
+
+                for _ in range(num_peers):
+                    peer_ip = input("Digite o endereço IP do par: ")
+                    peer_port = int(input("Digite a porta do par: "))
+                    peer_address = (peer_ip, peer_port)
+                    peer_addresses.append(peer_address)
+
+                # Enviar para todos os pares que alguém foi adicionado ao grupo
+                for peer in peer_addresses:
+                    message_text = f"{my_ip} added {peer} to the group"
+                    create_group_thread = threading.Thread(target=sync_messages, args=(udp_socket, [peer], message_text))
+                    create_group_thread.start()
+                clear_terminal()
+
+            elif menu_main == 2:
+                # Inicie a thread de envio de mensagens na thread principal
+                send_messages(udp_socket, my_ip)
+                clear_terminal()
+
+            elif menu_main == 3:
+                read_messages()
+
+            elif menu_main == 4:
+                # Feche o socket ao sair
+                udp_socket.close()
+                exit()
+    except Exception as e:
+        print(f"Error: {str(e)}")
+    finally:
+        udp_socket.close()
 
 if __name__ == "__main__":
     main()

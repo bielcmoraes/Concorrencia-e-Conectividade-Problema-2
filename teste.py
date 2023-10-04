@@ -1,6 +1,5 @@
 
-# IMPLEMENTAR CONFIRMAÇÃO DE ENTREGA PARA A LISTA DE MENSAGENS PQ TEM HORA QUE UM DOS PACOTES FALHA E O USUÁRIO NÃO TEM SUA LISTA ATUALIZADA
-
+#  implementar envio de chave pública quando um membro do grupo ficar online
 import sys
 import uuid
 
