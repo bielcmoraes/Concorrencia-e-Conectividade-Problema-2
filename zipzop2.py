@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import padding as sym_padding
 
 # Lista de pares participantes do grupo
-peer_addresses = []  # Agora, os pares serão adicionados dinamicamente
+peer_addresses = [("192.168.0.127", 4444)]
 
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
@@ -66,6 +66,7 @@ def resend_unconfirmed_packets(udp_socket):
 # Função para enviar mensagens em partes
 def send_parts(udp_socket, id, content, size, part, my_ip, my_port):
     global peer_addresses
+    global public_keys
 
     # Crie um dicionário para a mensagem em formato JSON
     message_data = {
@@ -81,12 +82,15 @@ def send_parts(udp_socket, id, content, size, part, my_ip, my_port):
     # Serializar a mensagem em JSON
     message_json = json.dumps(message_data)
 
-    # Enviar a mensagem para todos os pares
     for peer_addr in peer_addresses:
-        udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
+        for peer, public_key_str in public_keys.items():
+            if peer_addr == peer:
+                encrypted_message = encrypt_message(message_json, public_key_str)
+                udp_socket.sendto(encrypted_message, peer_addr)
 
-        # Adicione o pacote não confirmado ao dicionário
-        unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+                # Adicione o pacote não confirmado ao dicionário
+                unconfirmed_packets[id] = {"packet": encrypted_message, "address": peer_addr, "send_time": time.time()}
+
 
 # Função para criptografar uma mensagem com a chave pública
 def encrypt_message(message, public_key_str):
@@ -114,7 +118,7 @@ def decrypt_message(encrypted_message, private_key_str):
     )
     return decrypted_message.decode('utf-8')
 
-# Função para enviar mensagens em segundo plano
+# Função para enviar mensagens
 def send_messages(udp_socket, my_ip, my_port):
     global peer_addresses
 
@@ -148,26 +152,7 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            for peer, public_key_str in public_keys.items():
-                if peer_addr == peer:
-                    public_key = public_key_str
-                    message_encrypt = encrypt_message(message_json, public_key)
-                    udp_socket.sendto(message_encrypt, peer_addr)
-
-            # Crie um dicionário para a confirmação em formato JSON
-            confirmation_data = {
-                "message_type": "Confirmation",
-                "message_id": message_id,
-                "sender_ip": my_ip,
-                "sender_port": my_port,
-                "last_message_id": last_message_id
-            }
-
-            # Serializar a confirmação em JSON
-            confirmation_json = json.dumps(confirmation_data)
-
-            # Envie a confirmação
-            udp_socket.sendto(confirmation_json.encode('utf-8'), peer_addr)
+            send_parts(udp_socket, message_id, "Message", 0, message_json, my_ip, my_port)
 
         if message_data not in all_messages:
             all_messages.append(message_data)
@@ -197,7 +182,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
     global peer_addresses
     global unconfirmed_packets
     global public_keys
-    global confirmation_message
+    global confirmation_messages
 
     parts_messages = {}
 
@@ -237,8 +222,11 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                                 "last_message_id": last_message_id
                             }
 
-                            udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr)
+                            # Serializar e criptografar a confirmação antes de enviar
+                            confirmation_json = json.dumps(confirmation_message)
+                            encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
 
+                            udp_socket.sendto(encrypted_confirmation, addr)
                         else:
                             # Se não houver mensagens anteriores, envie "first" como last_message_id
                             confirmation_message = {
@@ -248,7 +236,12 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                                 "sender_port": my_address[1],
                                 "last_message_id": "first"
                             }
-                            udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr)
+
+                            # Serializar e criptografar a confirmação antes de enviar
+                            confirmation_json = json.dumps(confirmation_message)
+                            encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
+
+                            udp_socket.sendto(encrypted_confirmation, addr)
 
                 elif message_type == "Confirmation":
                     if "message_id" in message_data and "last_message_id" in message_data:
@@ -273,6 +266,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                         if " is online. Key: " in text_sync:
                             ip_value = text_sync.split(" is online. Key: ")[0]
                             public_key_str = text_sync.split(" is online. Key: ")[1]
+                            print("AVISO ON", public_key_str)
 
                             public_keys[ip_value] = public_key_str
                             send_parts(udp_socket, str(uuid.uuid4()), "peer_addresses", len(peer_addresses), my_address[0], my_address[1])
@@ -293,10 +287,15 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                         }
 
                         addr_confirmation = (message_data["sender_ip"], message_data["sender_port"])
-                        udp_socket.sendto(json.dumps(confirmation_message).encode('utf-8'), addr_confirmation)
+
+                        # Serializar e criptografar a confirmação antes de enviar
+                        confirmation_json = json.dumps(confirmation_message)
+                        encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
+
+                        udp_socket.sendto(encrypted_confirmation, addr_confirmation)
+
         except:
             pass
-
 
 # Função para ordenar mensagens com base no "last_message_id"
 def order_messages(unordered_messages):
