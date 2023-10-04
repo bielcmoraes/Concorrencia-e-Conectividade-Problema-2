@@ -8,7 +8,6 @@ import time
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives import padding as sym_padding
 
 # Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.127", 4444)]
@@ -63,35 +62,6 @@ def resend_unconfirmed_packets(udp_socket):
                 # Atualize o horário de envio
                 unconfirmed_packets[message_id]["send_time"] = time.time()
 
-# Função para enviar mensagens em partes
-def send_parts(udp_socket, id, content, size, part, my_ip, my_port):
-    global peer_addresses
-    global public_keys
-
-    # Crie um dicionário para a mensagem em formato JSON
-    message_data = {
-        "message_type": "SyncP",
-        "message_id": id,
-        "sender_ip": my_ip,
-        "sender_port": my_port,
-        "content": content,
-        "size": size,
-        "part": part
-    }
-
-    # Serializar a mensagem em JSON
-    message_json = json.dumps(message_data)
-
-    for peer_addr in peer_addresses:
-        for peer, public_key_str in public_keys.items():
-            if peer_addr == peer:
-                encrypted_message = encrypt_message(message_json, public_key_str)
-                udp_socket.sendto(encrypted_message, peer_addr)
-
-                # Adicione o pacote não confirmado ao dicionário
-                unconfirmed_packets[id] = {"packet": encrypted_message, "address": peer_addr, "send_time": time.time()}
-
-
 # Função para criptografar uma mensagem com a chave pública
 def encrypt_message(message, public_key_str):
     public_key = serialization.load_pem_public_key(public_key_str.encode('utf-8'))
@@ -131,20 +101,13 @@ def send_messages(udp_socket, my_ip, my_port):
         # Gere um novo ID de mensagem
         message_id = str(uuid.uuid4())
 
-        # Verifique a posição da mensagem na lista
-        if len(all_messages) == 0:
-            last_message_id = "first"
-        else:
-            last_message_id = all_messages[-1]["message_id"]
-
         # Crie um dicionário para a mensagem em formato JSON
         message_data = {
             "message_type": "Message",
             "message_id": message_id,
             "sender_ip": my_ip,
             "sender_port": my_port,
-            "text": message_text,
-            "last_message_id": last_message_id
+            "text": message_text
         }
 
         # Serializar a mensagem em JSON
@@ -152,178 +115,78 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            send_parts(udp_socket, message_id, "Message", 0, message_json, my_ip, my_port)
+            encrypted_message = encrypt_message(message_json, public_keys[peer_addr])
+            udp_socket.sendto(encrypted_message, peer_addr)
 
-        if message_data not in all_messages:
-            all_messages.append(message_data)
-
-# Função para juntar as partes das mensagens no local adequado
-def join_parts(parts_messages, my_address):
-    global peer_addresses
-    global all_messages
-
-    for package_id in parts_messages:
-        package_list = parts_messages.get(package_id)
-        if len(package_list) == package_list[0]["size"]:
-            if package_list[0]["content"] == "peer_addresses":
-                for package in package_list:
-                    if package["part"] not in peer_addresses and package["part"] != my_address:
-                        peer_addresses.append(tuple(package["part"]))
-
-            elif package_list[0]["content"] == "messages_list":
-                for package in package_list:
-                    if package["part"] not in all_messages:
-                        package["part"]["message_type"] = "Message"
-                        all_messages.append(package["part"])
-            return package_id
+        # Aguarde a confirmação de entrega
+        confirmation_received = False
+        while not confirmation_received:
+            if message_id in confirmation_messages:
+                confirmation_received = True
+                del confirmation_messages[message_id]
+            time.sleep(1)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
-    global peer_addresses
-    global unconfirmed_packets
     global public_keys
     global confirmation_messages
 
-    parts_messages = {}
-
     while True:
-        package_id = join_parts(parts_messages, my_address)
-        if package_id is not None:
-            parts_messages.pop(package_id)
-
         try:
             data, addr = udp_socket.recvfrom(1024)
 
-            data_decrypt = decrypt_message(data, private_key_str)
+            print("CRIPTOGRAFADA", data)
 
-            message_json = data_decrypt.decode('utf-8')
+            try:
+                data_decrypt = decrypt_message(data, private_key_str)
+                print("DESCRIPTOGRAFADA", data_decrypt)
 
-            # Desserializar a mensagem JSON
-            message_data = json.loads(message_json)
+                message_json = data_decrypt.decode('utf-8')
 
-            if "message_type" in message_data:
-                message_type = message_data["message_type"]
-                if message_type == "Message":
-                    if "message_id" in message_data and "text" in message_data:
-                        message_id = message_data["message_id"]
+                print("DESCRIPTOGRAFADA json", message_json)
+                # Desserializar a mensagem JSON
+                message_data = json.loads(message_json)
 
-                        # Armazena a mensagem na lista desordenada
-                        if message_data not in all_messages:
+                if "message_type" in message_data:
+                    message_type = message_data["message_type"]
+                    if message_type == "Message":
+                        if "message_id" in message_data and "text" in message_data:
+                            message_id = message_data["message_id"]
+
+                            # Enviar confirmação de entrega da mensagem com o mesmo ID
+                            confirmation_message = {
+                                "message_type": "Confirmation",
+                                "message_id": message_id
+                            }
+
+                            # Serializar e criptografar a confirmação antes de enviar
+                            confirmation_json = json.dumps(confirmation_message)
+                            encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
+
+                            udp_socket.sendto(encrypted_confirmation, addr)
+
+                            # Adicione a mensagem à lista de mensagens
                             all_messages.append(message_data)
 
-                        # Enviar confirmação de entrega da mensagem com o mesmo ID
-                        if len(all_messages) != 0:
-                            last_message_id = all_messages[-1]["message_id"]
-                            confirmation_message = {
-                                "message_type": "Confirmation",
-                                "message_id": message_id,
-                                "sender_ip": my_address[0],
-                                "sender_port": my_address[1],
-                                "last_message_id": last_message_id
-                            }
+                    elif message_type == "Confirmation":
+                        if "message_id" in message_data:
+                            message_id = message_data["message_id"]
 
-                            # Serializar e criptografar a confirmação antes de enviar
-                            confirmation_json = json.dumps(confirmation_message)
-                            encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
+                            # Adiciona ao dicionário de mensagens de confirmação
+                            confirmation_messages_exists = confirmation_messages.get(message_id)
+                            if confirmation_messages_exists is not None:
+                                confirmation_messages[message_id].append(message_data)
+                            else:
+                                confirmation_messages[message_id] = [message_data]
+            except ValueError:
+                pass
 
-                            udp_socket.sendto(encrypted_confirmation, addr)
-                        else:
-                            # Se não houver mensagens anteriores, envie "first" como last_message_id
-                            confirmation_message = {
-                                "message_type": "Confirmation",
-                                "message_id": message_id,
-                                "sender_ip": my_address[0],
-                                "sender_port": my_address[1],
-                                "last_message_id": "first"
-                            }
-
-                            # Serializar e criptografar a confirmação antes de enviar
-                            confirmation_json = json.dumps(confirmation_message)
-                            encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
-
-                            udp_socket.sendto(encrypted_confirmation, addr)
-
-                elif message_type == "Confirmation":
-                    if "message_id" in message_data and "last_message_id" in message_data:
-                        message_id = message_data["message_id"]
-
-                        # Adiciona ao dicionário de mensagens de confirmação
-                        confirmation_messages_exists = confirmation_messages.get(message_id)
-                        # Salva a posição de cada mensagem na lista de cada par
-                        if confirmation_messages_exists is not None:
-                            confirmation_messages[message_id].append(message_data)
-                        else:
-                            confirmation_messages[message_id] = [message_data]
-
-                        for message in all_messages:
-                            if message["message_id"] == message_id:
-                                if message_data["message_id"] in unconfirmed_packets:
-                                    del unconfirmed_packets[message_data["message_id"]]
-
-                elif message_type == "Sync":
-                    if "message_id" in message_data and "text" in message_data:
-                        text_sync = message_data["text"]
-                        if " is online. Key: " in text_sync:
-                            ip_value = text_sync.split(" is online. Key: ")[0]
-                            public_key_str = text_sync.split(" is online. Key: ")[1]
-                            print("AVISO ON", public_key_str)
-
-                            public_keys[ip_value] = public_key_str
-                            send_parts(udp_socket, str(uuid.uuid4()), "peer_addresses", len(peer_addresses), my_address[0], my_address[1])
-
-                elif message_type == "SyncP":
-                    if "message_id" in message_data and "size" in message_data and "part" in message_data:
-                        message_id = message_data["message_id"]
-                        # Verifica se existe uma chave para a parte da mensagem e cria caso não exista
-                        message_part_exists = parts_messages.get(message_id)
-                        if message_part_exists is not None:
-                            parts_messages[message_id].append(message_data)
-                        else:
-                            parts_messages[message_id] = [message_data]
-
-                        confirmation_message = {
-                            "message_type": "Confirmation",
-                            "message_id": message_id
-                        }
-
-                        addr_confirmation = (message_data["sender_ip"], message_data["sender_port"])
-
-                        # Serializar e criptografar a confirmação antes de enviar
-                        confirmation_json = json.dumps(confirmation_message)
-                        encrypted_confirmation = encrypt_message(confirmation_json, public_key_str)
-
-                        udp_socket.sendto(encrypted_confirmation, addr_confirmation)
-
-        except:
+        except socket.timeout:
             pass
 
-# Função para ordenar mensagens com base no "last_message_id"
+# Função para ordenar mensagens com base no "message_id"
 def order_messages(unordered_messages):
-    def sort_key(message):
-        last_message_id = message["last_message_id"]
-        message_id = message["message_id"]
-
-        try:
-            last_message_id = uuid.UUID(last_message_id)
-        except ValueError:
-            last_message_id = uuid.UUID(int=0)
-
-        try:
-            message_id = uuid.UUID(message_id)
-        except ValueError:
-            message_id = uuid.UUID(int=0)
-
-        if last_message_id == "first":
-            return (uuid.UUID(int=0), message_id)
-        elif last_message_id is None:
-            return (uuid.UUID(int=1), message_id)
-        return (last_message_id, message_id)
-
-    first_messages = [message for message in unordered_messages if message["last_message_id"] == "first"]
-    other_messages = [message for message in unordered_messages if message["last_message_id"] != "first"]
-    ordered_messages = first_messages + sorted(other_messages, key=sort_key)
-
-    return ordered_messages
+    return sorted(unordered_messages, key=lambda x: x["message_id"])
 
 # Função para ler todas as mensagens
 def read_messages():
@@ -402,7 +265,7 @@ def main():
 
                     # Envie para todos os pares que alguém foi adicionado ao grupo
                     message_text = f"{my_ip}:{my_port} added {peer_ip}:{peer_port} to the group"
-                    send_parts(udp_socket, str(uuid.uuid4()), "Message", 0, message_text, my_ip, my_port)
+                    udp_socket.sendto(message_text.encode('utf-8'), peer_address)
                 clear_terminal()
 
             elif menu_main == 2:
