@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 
 # Lista de pares participantes do grupo
-peer_addresses = []
+peer_addresses = [("192.168.0.127", 4444)]
 
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
@@ -103,6 +103,7 @@ def handle_confirmations():
 # Função para enviar mensagens
 def send_messages(udp_socket, my_ip, my_port):
     global peer_addresses
+    global public_keys
 
     while True:
         message_text = input("Digite as mensagens (ou 'exit' para sair): ")
@@ -127,6 +128,7 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
+            print("DDDDDDDDDD", public_keys)
             encrypted_message = encrypt_message(message_json, public_keys[peer_addr])
             udp_socket.sendto(encrypted_message, peer_addr)
 
@@ -183,7 +185,41 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                             else:
                                 confirmation_messages[message_id] = [message_data]
             except ValueError:
-                pass
+                message_type = message_data["message_type"]
+                if message_type == "Sync":
+                    if "message_id" in message_data and "text" in message_data:
+                        text_sync = message_data["text"]
+                        if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
+                            peers_size = len(peer_addresses)
+                            # Gere um novo ID de mensagem
+                            message_list_peers_id = str(uuid.uuid4())
+
+                            public_key_text = f"Public key: {public_key}"
+
+                            # Crie um dicionário para a mensagem em formato JSON
+                            message_public_key = {
+                                "message_type": "Sync",
+                                "message_id": message_id,
+                                "text": public_key_text
+                            }
+
+                            # Envie a chave pública para o par que informou que está online
+                            for peer in peer_addresses:
+                                udp_socket.sendto(json.dumps(message_public_key).encode('utf-8'), peer)
+                            
+                            # Pegar address do usuário que ficou online
+                            ip_value = text_sync.split(" is online. Key: ")[0]
+
+                            # Pegar a chave pública do usuário que ficou online
+                            public_key = text_sync.split("Key:", 1)
+
+                            # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
+                            public_keys[ip_value] = public_key
+                        
+                        elif "Public key: " in text_sync:
+                            public_key = text_sync.split("Public key: ")[1]
+                            # Adicionar a chave do usuário ao dicionário de chaves públicas
+                            public_keys[ip_value] = public_key
 
         except socket.timeout:
             pass
@@ -211,7 +247,6 @@ def clear_terminal():
     else:
         os.system("clear")
 
-# Função principal
 # Função principal
 def main():
     global peer_addresses
@@ -292,10 +327,9 @@ def main():
                 # Feche o socket ao sair
                 udp_socket.close()
                 exit()
-    except Exception as e:
-        print(f"Error: {str(e)}")
-    finally:
-        udp_socket.close()
+    except socket.timeout:
+        #print(f"Error: {str(e)}")
+        pass
 
 if __name__ == "__main__":
     main()
