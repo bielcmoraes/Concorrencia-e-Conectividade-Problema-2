@@ -162,6 +162,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
     while True:
         try:
             data, addr = udp_socket.recvfrom(1400)
+            print("\n", addr, data)
 
             try:
                 data_decode = data.decode('utf-8')
