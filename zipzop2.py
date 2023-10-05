@@ -62,9 +62,9 @@ def resend_unconfirmed_packets(udp_socket):
                 # Atualize o horário de envio
                 unconfirmed_packets[message_id]["send_time"] = time.time()
 
-# Função para criptografar uma mensagem com a chave pública
-def encrypt_message(message, public_key_str):
-    public_key = serialization.load_pem_public_key(public_key_str.encode('utf-8'))
+# Função para criptografar uma mensagem com a chave pública serializada
+def encrypt_message(message, public_key_bytes):
+    public_key = serialization.load_pem_public_key(public_key_bytes)
     encrypted_message = public_key.encrypt(
         message.encode('utf-8'),
         padding.OAEP(
@@ -75,7 +75,7 @@ def encrypt_message(message, public_key_str):
     )
     return encrypted_message
 
-# Função para descriptografar uma mensagem com a chave privada
+# Função para descriptografar uma mensagem com a chave privada serializada
 def decrypt_message(encrypted_message, private_key_str):
     private_key = serialization.load_pem_private_key(private_key_str.encode('utf-8'), password=None)
     decrypted_message = private_key.decrypt(
@@ -128,9 +128,10 @@ def send_messages(udp_socket, my_ip, my_port):
 
         # Enviar a mensagem para todos os pares
         for peer_addr in peer_addresses:
-            print("PUBLIC KEY", public_keys)
-            encrypted_message = encrypt_message(message_json, public_keys[str(peer_addr)])
-            udp_socket.sendto(encrypted_message, peer_addr)
+            public_key_bytes = public_keys.get(peer_addr)
+            if public_key_bytes:
+                encrypted_message = encrypt_message(message_json, public_key_bytes)
+                udp_socket.sendto(encrypted_message, peer_addr)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
@@ -245,7 +246,7 @@ def main():
     )
 
     public_key = private_key.public_key()
-    public_key_str = public_key.public_bytes(
+    public_key_bytes = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
@@ -262,7 +263,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_str))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_bytes))
         receive_thread.start()
 
         # Iniciar a thread para lidar com as confirmações
@@ -273,7 +274,7 @@ def main():
         message_text = f"{(my_ip, my_port)} is online."
         sync_messages(udp_socket, message_text, my_ip, my_port)
         for peer in peer_addresses:
-            udp_socket.sendto(public_key_str, peer)
+            udp_socket.sendto(public_key_bytes, peer)
 
         while True:
             print("[1] Para adicionar participantes a um grupo")
@@ -315,4 +316,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
