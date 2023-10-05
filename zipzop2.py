@@ -153,18 +153,15 @@ def send_messages(udp_socket, my_ip, my_port):
 
         if message_data not in all_messages:
             all_messages.append(message_data)
-        
-        print("\nDENTRO DE SEND", all_messages)
 
 # Função para receber mensagens em formato JSON
-def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
+def receive_messages(udp_socket, private_key_str, public_key_str):
     global public_keys
     global confirmation_messages
 
     while True:
         try:
-            data, addr = udp_socket.recvfrom(1400)
-            print("\n", addr, data)
+            data, addr = udp_socket.recvfrom(2048)
 
             try:
                 data_decode = data.decode('utf-8')
@@ -172,7 +169,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                 if "-----BEGIN PUBLIC KEY-----" in data_decode and "-----END PUBLIC KEY-----" in data_decode:
                     public_keys[addr] = data
                     udp_socket.sendto(public_key_str, addr)
-                    break  
+                    pass  
             except:
                 pass
 
@@ -200,7 +197,6 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
                             udp_socket.sendto(encrypted_confirmation, addr)
 
-                            print("Recebi e add na lista", message_data)
                             # Adicione a mensagem à lista de mensagens
                             all_messages.append(message_data)
 
@@ -225,7 +221,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                                     udp_socket.sendto(public_key_str, peer)
 
             except Exception as e:
-                print("ERRUUUU", e)
+                print("Error", e)
                 
 
         except socket.timeout:
@@ -289,7 +285,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_bytes))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, private_key_str, public_key_bytes))
         receive_thread.start()
 
         # Iniciar a thread para lidar com as confirmações
@@ -337,7 +333,6 @@ def main():
                 udp_socket.close()
                 exit()
     except socket.timeout:
-        #print(f"Error: {str(e)}")
         pass
 
 if __name__ == "__main__":

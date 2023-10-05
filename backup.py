@@ -156,6 +156,8 @@ def send_messages(udp_socket, my_ip):
             # Envie a confirmação
             udp_socket.sendto(confirmation_json.encode('utf-8'), peer_addr)
 
+        print("AAAAAAAAAAAAAAAAAAAAAAAA", peer_addresses)
+        print("AAAAAAAAAAAAAAAAAAAAAAAA", public_keys)
         if message_data not in all_messages:
             all_messages.append(message_data)
 
