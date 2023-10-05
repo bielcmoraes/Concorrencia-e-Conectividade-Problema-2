@@ -143,6 +143,9 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
             print("CRIPTOGRAFADA", data)
 
+            if "-----BEGIN PUBLIC KEY-----" in data.decode('utf-8') and "-----END PUBLIC KEY-----" in data.decode('utf-8'):
+                public_keys[addr] = data
+
             try:
                 data_decrypt = decrypt_message(data, private_key_str)
                 print("DESCRIPTOGRAFADA", data_decrypt)
@@ -184,50 +187,19 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
                                 confirmation_messages[message_id].append(message_data)
                             else:
                                 confirmation_messages[message_id] = [message_data]
+                    
+                    elif message_type == "Sync":
+                        if "message_id" in message_data and "text" in message_data:
+                            text_sync = message_data["text"]
+                            if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
+        
+                                # Envie a chave pública para o par que informou que está online
+                                for peer in peer_addresses:
+                                    udp_socket.sendto(public_key_str, peer)
 
-                # Se a mensagem for uma chave pública
-                elif "message_type" in message_data and message_data["message_type"] == "Public Key":
-                    if "sender_ip" in message_data and "sender_port" in message_data and "text" in message_data:
-                        sender_ip = message_data["sender_ip"]
-                        sender_port = message_data["sender_port"]
-                        public_key = message_data["text"]
-
-                        # Adicione a chave pública ao dicionário public_keys com uma tupla como chave
-                        public_keys[(sender_ip, sender_port)] = public_key
-
-            except ValueError:
-                message_json = data.decode('utf-8')
-                # Desserializar a mensagem JSON
-                message_data = json.loads(message_json)
-                message_type = message_data["message_type"]
-                if message_type == "Sync":
-                    if "message_id" in message_data and "text" in message_data:
-                        text_sync = message_data["text"]
-                        if "is online" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
-    
-                            # Gere um novo ID de mensagem
-                            public_key_id = str(uuid.uuid4())
-
-                            public_key_text = f"Public key: {public_key_str}"
-
-                            # Crie um dicionário para a mensagem em formato JSON
-                            message_public_key = {
-                                "message_type": "Sync",
-                                "message_id": public_key_id,
-                                "text": public_key_text
-                            }
-
-                            # Envie a chave pública para o par que informou que está online
-                            for peer in peer_addresses:
-                                udp_socket.sendto(json.dumps(message_public_key).encode('utf-8'), peer)
-                            
-                            # Pegar address do usuário que ficou online
-                            ip_value = text_sync.split(" is online.")[0]
-
-                            # Pegar a chave pública do usuário que ficou online
-                            public_key = text_sync.split("Key: ")[1]
-                            # Adicionar a chave do usuário que ficou online ao dicionário de chaves públicas
-                            public_keys[ip_value] = public_key.rstrip('\n')
+            except Exception as e:
+                print("ERRUUUU", e)
+                
 
         except socket.timeout:
             pass
@@ -290,7 +262,7 @@ def main():
         udp_socket.bind((my_ip, my_port))
 
         # Crie uma thread para receber mensagens
-        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str.decode('utf-8'), public_key_str.decode('utf-8')))
+        receive_thread = threading.Thread(target=receive_messages, args=(udp_socket, (my_ip, my_port), private_key_str, public_key_str))
         receive_thread.start()
 
         # Iniciar a thread para lidar com as confirmações
