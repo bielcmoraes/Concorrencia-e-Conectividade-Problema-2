@@ -230,9 +230,37 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
             print(f"Ocorreu um erro de soquete: {str(e)}")
             break  # Encerre a thread quando ocorrer um erro de soquete
 
-# Função para ordenar mensagens com base no "message_id"
+# Função para ordenar mensagens com base no "last_message_id"
 def order_messages(unordered_messages):
-    return sorted(unordered_messages, key=lambda x: x["message_id"])
+    # Função auxiliar para calcular a chave de ordenação
+    def sort_key(message):
+        last_message_id = message["last_message_id"]
+        message_id = message["message_id"]
+
+        # Converter as strings em UUIDs válidos
+        try:
+            last_message_id = uuid.UUID(last_message_id)
+        except ValueError:
+            last_message_id = uuid.UUID(int=0)  # Usar valor padrão se não for um UUID válido
+
+        try:
+            message_id = uuid.UUID(message_id)
+        except ValueError:
+            message_id = uuid.UUID(int=0)  # Usar valor padrão se não for um UUID válido
+
+        # Atribuir um valor especial para mensagens com "last_message_id" igual a "first"
+        if last_message_id == "first":
+            return (uuid.UUID(int=0), message_id)
+        elif last_message_id is None:
+            return (uuid.UUID(int=1), message_id)  # Usar outro UUID como valor especial
+        return (last_message_id, message_id)
+
+    # Filtrar mensagens com last_message_id igual a "first" e ordenar o restante
+    first_messages = [message for message in unordered_messages if message["last_message_id"] == "first"]
+    other_messages = [message for message in unordered_messages if message["last_message_id"] != "first"]
+    ordered_messages = first_messages + sorted(other_messages, key=sort_key)
+
+    return ordered_messages
 
 # Função para ler todas as mensagens
 def read_messages():
