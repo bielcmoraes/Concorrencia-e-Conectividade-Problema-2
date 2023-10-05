@@ -143,6 +143,23 @@ def send_messages(udp_socket, my_ip, my_port):
             if public_key_bytes:
                 encrypted_message = encrypt_message(message_json, public_key_bytes)
                 udp_socket.sendto(encrypted_message, peer_addr)
+            
+            # Crie um dicionário para a confirmação em formato JSON
+            confirmation_data = {
+                "message_type": "Confirmation",
+                "message_id": message_id
+            }
+
+            # Serializar a confirmação em JSON
+            confirmation_json = json.dumps(confirmation_data)
+
+            encrypted_confirmation = encrypt_message(confirmation_json, public_key_bytes)
+
+            # Envie a confirmação
+            udp_socket.sendto(encrypted_confirmation.encode('utf-8'), peer_addr)
+
+        if message_data not in all_messages:
+            all_messages.append(message_data)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
@@ -167,7 +184,6 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
                 # Desserializar a mensagem JSON
                 message_data = json.loads(data_decrypt)
-                print("AAAAAAAAAA", message_data)
 
                 if "message_type" in message_data:
                     message_type = message_data["message_type"]
