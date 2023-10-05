@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 import uuid
 import os
@@ -45,7 +46,10 @@ def sync_messages(udp_socket, message_text, my_ip, my_port):
 
     # Enviar a mensagem para todos os pares
     for peer_addr in peer_addresses:
-        udp_socket.sendto(message_json.encode('utf-8'), peer_addr)
+            public_key_bytes = public_keys.get(peer_addr)
+            if public_key_bytes:
+                encrypted_message = encrypt_message(message_json, public_key_bytes)
+                udp_socket.sendto(encrypted_message, peer_addr)
 
 # Função para reenviar pacotes não confirmados
 def resend_unconfirmed_packets(udp_socket):
@@ -64,6 +68,7 @@ def resend_unconfirmed_packets(udp_socket):
 
 # Função para criptografar uma mensagem com a chave pública serializada
 def encrypt_message(message, public_key_bytes):
+    print("Bucetaaaaa")
     public_key = serialization.load_pem_public_key(public_key_bytes)
     encrypted_message = public_key.encrypt(
         message.encode('utf-8'),
@@ -73,10 +78,15 @@ def encrypt_message(message, public_key_bytes):
             label=None
         )
     )
+    print("Bucetaaaaa", encrypted_message)
     return encrypted_message
 
 # Função para descriptografar uma mensagem com a chave privada serializada
 def decrypt_message(encrypted_message, private_key_str):
+    print("CCUUUUU", sys.getsizeof(encrypted_message))
+    print("CCUUUUU", encrypted_message)
+    print("CCUUUUU", sys.getsizeof(private_key_str))
+    print("CCUUUUU", private_key_str)
     private_key = serialization.load_pem_private_key(private_key_str, password=None)
     decrypted_message = private_key.decrypt(
         encrypted_message,
@@ -86,6 +96,7 @@ def decrypt_message(encrypted_message, private_key_str):
             label=None
         )
     )
+    print("CCUUUUU", decrypted_message.decode('utf-8'))
     return decrypted_message.decode('utf-8')
 
 # Trata a confirmação de mensagens
@@ -140,13 +151,14 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
     while True:
         try:
-            data, addr = udp_socket.recvfrom(1024)
+            data, addr = udp_socket.recvfrom(1400)
 
             try:
                 data_decode = data.decode('utf-8')
 
                 if "-----BEGIN PUBLIC KEY-----" in data_decode and "-----END PUBLIC KEY-----" in data_decode:
-                    public_keys[addr] = data  
+                    public_keys[addr] = data
+                    break  
             except:
                 pass
 
@@ -155,6 +167,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
                 # Desserializar a mensagem JSON
                 message_data = json.loads(data_decrypt)
+                print("AAAAAAAAAA", message_data)
 
                 if "message_type" in message_data:
                     message_type = message_data["message_type"]
