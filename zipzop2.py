@@ -221,7 +221,7 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                                     udp_socket.sendto(public_key_str, peer)
 
             except Exception as e:
-                print("Error", e)
+                pass
                 
 
         except socket.timeout:
