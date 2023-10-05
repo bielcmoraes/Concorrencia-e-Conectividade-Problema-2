@@ -153,6 +153,8 @@ def send_messages(udp_socket, my_ip, my_port):
 
         if message_data not in all_messages:
             all_messages.append(message_data)
+        
+        print("\nDENTRO DE SEND", all_messages)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
@@ -198,6 +200,7 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
 
                             udp_socket.sendto(encrypted_confirmation, addr)
 
+                            print("Recebi e add na lista", message_data)
                             # Adicione a mensagem à lista de mensagens
                             all_messages.append(message_data)
 
