@@ -77,7 +77,7 @@ def encrypt_message(message, public_key_bytes):
 
 # Função para descriptografar uma mensagem com a chave privada serializada
 def decrypt_message(encrypted_message, private_key_str):
-    private_key = serialization.load_pem_private_key(private_key_str.encode('utf-8'), password=None)
+    private_key = serialization.load_pem_private_key(private_key_str, password=None)
     decrypted_message = private_key.decrypt(
         encrypted_message,
         padding.OAEP(
@@ -142,20 +142,19 @@ def receive_messages(udp_socket, my_address, private_key_str, public_key_str):
         try:
             data, addr = udp_socket.recvfrom(1024)
 
-            print("CRIPTOGRAFADA", data)
+            try:
+                data_decode = data.decode('utf-8')
 
-            if "-----BEGIN PUBLIC KEY-----" in data.decode('utf-8') and "-----END PUBLIC KEY-----" in data.decode('utf-8'):
-                public_keys[addr] = data
+                if "-----BEGIN PUBLIC KEY-----" in data_decode and "-----END PUBLIC KEY-----" in data_decode:
+                    public_keys[addr] = data  
+            except:
+                pass
 
             try:
                 data_decrypt = decrypt_message(data, private_key_str)
-                print("DESCRIPTOGRAFADA", data_decrypt)
 
-                message_json = data_decrypt.decode('utf-8')
-
-                print("DESCRIPTOGRAFADA json", message_json)
                 # Desserializar a mensagem JSON
-                message_data = json.loads(message_json)
+                message_data = json.loads(data_decrypt)
 
                 if "message_type" in message_data:
                     message_type = message_data["message_type"]
@@ -235,7 +234,7 @@ def main():
     # Gerar um par de chaves RSA
     private_key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=1024
+        key_size=2048
     )
 
     # Exportar as chaves pública e privada
