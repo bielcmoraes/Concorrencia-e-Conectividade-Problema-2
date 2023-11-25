@@ -180,7 +180,7 @@ def join_parts(parts_messages, my_address):
                     if package["part"] not in all_messages:
                         package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
                         all_messages.append(package["part"])
-        return package_id
+            return package_id
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, my_address, private_key, public_key):

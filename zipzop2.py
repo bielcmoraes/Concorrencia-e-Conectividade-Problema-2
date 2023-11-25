@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 
 # Lista de pares participantes do grupo
-peer_addresses = [("192.168.0.127", 4444)]
+peer_addresses = [("192.168.0.180", 4444)]
 
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
@@ -118,12 +118,17 @@ def send_messages(udp_socket, my_ip, my_port):
         # Gere um novo ID de mensagem
         message_id = str(uuid.uuid4())
 
+         # Verifique a posição da mensagem na lista
+        if len(all_messages) == 0:
+            last_message_id = "first"
+        else:
+            last_message_id = all_messages[-1]["message_id"]
+
         # Crie um dicionário para a mensagem em formato JSON
         message_data = {
             "message_type": "Message",
             "message_id": message_id,
-            "sender_ip": my_ip,
-            "sender_port": my_port,
+            "last_message_id": last_message_id,
             "text": message_text
         }
 
@@ -303,7 +308,7 @@ def main():
 
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     udp_socket.settimeout(2)  # Define um timeout de 2 segundos
-
+    
     try:
         clear_terminal()
 
@@ -323,8 +328,10 @@ def main():
         # Informe que está online
         message_text = f"{(my_ip, my_port)} is online."
         sync_messages(udp_socket, message_text, my_ip, my_port)
+
+        # Envie a chave pública para todos os pares da lista
         for peer in peer_addresses:
-            udp_socket.sendto(public_key_bytes, peer)
+            udp_socket.sendto(public_key_bytes, peer) 
 
         while True:
             print("[1] Para adicionar participantes a um grupo")
