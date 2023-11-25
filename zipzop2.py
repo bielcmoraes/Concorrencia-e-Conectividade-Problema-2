@@ -51,6 +51,8 @@ def start_sync(udp_socket):
             if public_key_bytes:
                 encrypted_message = encrypt_message(message_json, public_key_bytes)
                 udp_socket.sendto(encrypted_message, peer_addr)
+    
+    print("SYNC ENVIADO")
 
 # Função para enviar todas as mensagens ou lista de pares e prosseguir com a sincronização
 def send_sync(udp_socket, id, content, size, part):
@@ -79,6 +81,23 @@ def send_sync(udp_socket, id, content, size, part):
 
                 # Adicione o pacote não confirmado ao dicionário
                 unconfirmed_packets[id] = {"packet": message_json.encode('utf-8'), "address": peer_addr, "send_time": time.time()}
+
+# Função para reenviar pacotes não confirmados
+def resend_unconfirmed_packets(udp_socket):
+
+    global unconfirmed_packets
+
+    while True:
+        time.sleep(3)  # Verificar a cada 5 segundos
+
+        for message_id, send_time in list(unconfirmed_packets.items()):
+            # Verifique se o tempo desde o envio excedeu um limite (por exemplo, 10 segundos)
+            if time.time() - send_time > 5:
+                # Reenvie o pacote correspondente
+                packet_data = unconfirmed_packets.pop(message_id)
+                udp_socket.sendto(packet_data["packet"], packet_data["address"])
+                # Atualize o horário de envio
+                unconfirmed_packets[message_id] = {"packet": packet_data["packet"], "address": packet_data["address"], "send_time": time.time()}
 
 # função para juntar as partes das mensagens no local adequado
 def system_sync():
@@ -277,10 +296,12 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                                 confirmation_messages[message_id] = [message_data]
                     
                     elif message_type == "Sync":
+                        print("SYNC:", message_data)
                         if "message_id" in message_data and "text" in message_data:
                             text_sync = message_data["text"]
                             if "Start sync" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
-        
+                                
+                                print("STAR SYNC:", message_data)
                                 # Envie a chave minha pública para o par que deseja sincronizar
                                 for peer in peer_addresses:
                                     udp_socket.sendto(public_key_str, peer)
@@ -303,6 +324,7 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                             
                         elif "message_id" in message_data and "content" in message_data and "size" in message_data and "part" in message_data:
                             
+                            print("PART:", message_data)
                             # Id da mensagem particionada
                             message_id = message_data["message_id"]
 
@@ -428,7 +450,11 @@ def main():
         confirmation_thread.start()
 
         # Iniciar a thread para sincronizar constantemente o sistema a cada "X" tempo
-        confirmation_thread = threading.Thread(target=system_sync())
+        confirmation_thread = threading.Thread(target=system_sync)
+        confirmation_thread.start()
+
+        # Iniciar a thread para sincronizar constantemente o sistema a cada "X" tempo
+        confirmation_thread = threading.Thread(target=resend_unconfirmed_packets, args=(udp_socket,))
         confirmation_thread.start()
 
         # Envie a chave pública para todos os pares da lista
