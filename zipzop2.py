@@ -13,6 +13,9 @@ from cryptography.hazmat.primitives import hashes
 # Lista de pares participantes do grupo
 peer_addresses = [("192.168.0.180", 4444)]
 
+# Todos os pacotes recebidos
+all_packages = []
+
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
 
@@ -51,8 +54,6 @@ def start_sync(udp_socket):
             if public_key_bytes:
                 encrypted_message = encrypt_message(message_json, public_key_bytes)
                 udp_socket.sendto(encrypted_message, peer_addr)
-    
-    print("SYNC ENVIADO")
 
 # Função para enviar todas as mensagens ou lista de pares e prosseguir com a sincronização
 def send_sync(udp_socket, id, content, size, part):
@@ -101,15 +102,19 @@ def resend_unconfirmed_packets(udp_socket):
 
 # função para juntar as partes das mensagens no local adequado
 def system_sync():
-    
     global parts_messages
     global peer_addresses
     global all_messages
+    global all_packages
 
     while True:
-        print("Sync ao vivo", parts_messages)
-        for package_id in parts_messages:
-            package_list = parts_messages.get(package_id)
+        print("Sincronizando: ", all_messages)
+
+        # Crie uma cópia do dicionário para evitar o erro durante a iteração
+        parts_messages_copy = dict(parts_messages)
+
+        for package_id in parts_messages_copy:
+            package_list = parts_messages_copy.get(package_id)
             if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
                 if package_list[0]["content"] == "peer_addresses":
                     for package in package_list:
@@ -119,7 +124,7 @@ def system_sync():
                 elif package_list[0]["content"] == "messages_list":
                     for package in package_list:
                         if package["part"] not in all_messages:
-                            package["part"]["message_type"] = "Message" #Altera o tipo do pacote para evitar bugs
+                            package["part"]["message_type"] = "Message"  # Altera o tipo do pacote para evitar bugs
                             all_messages.append(package["part"])
             
                 parts_messages.pop(package_id) # Retira os pacotes completos que já foram sincronizados da lista
@@ -180,12 +185,15 @@ def handle_confirmations():
                 del confirmation_messages[message_id]
         time.sleep(1)
 
-# Função para enviar mensagens
+# Função para enviar mensagens de texto
 def send_messages(udp_socket, my_ip, my_port):
     global peer_addresses
     global public_keys
 
     while True:
+
+        start_sync(udp_socket)
+
         message_text = input("Digite as mensagens (ou 'exit' para sair): ")
 
         if message_text.lower() == 'exit':
@@ -238,8 +246,8 @@ def send_messages(udp_socket, my_ip, my_port):
         if message_save not in all_messages:
             all_messages.append(message_save)
 
-# Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, private_key_str, public_key_str):
+    global all_packages
     global public_keys
     global confirmation_messages
     global parts_messages
@@ -260,9 +268,10 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
 
             try:
                 data_decrypt = decrypt_message(data, private_key_str)
-
                 # Desserializar a mensagem JSON
                 message_data = json.loads(data_decrypt)
+                
+                all_packages.append(message_data)
 
                 if "message_type" in message_data:
                     message_type = message_data["message_type"]
@@ -297,11 +306,9 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                                 confirmation_messages[message_id] = [message_data]
                     
                     elif message_type == "Sync":
-                        print("SYNC:", message_data)
                         if "message_id" in message_data and "text" in message_data:
                             text_sync = message_data["text"]
                             if "Start sync" in text_sync: # Envia a lista de pares atualizada e a lista de mensagens
-                                
                                 print("STAR SYNC:", message_data)
                                 # Envie a chave minha pública para o par que deseja sincronizar
                                 for peer in peer_addresses:
@@ -322,9 +329,9 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                                 # Envie a lista de mensagens atual
                                 for message in all_messages:
                                     send_sync(udp_socket, message_list_message_id, "messages_list", messages_size, message)
-                            
+            
                         elif "message_id" in message_data and "content" in message_data and "size" in message_data and "part" in message_data:
-                            
+                            # Parte da mensagem sendo recebida durante a sincronização
                             print("PART:", message_data)
                             # Id da mensagem particionada
                             message_id = message_data["message_id"]
@@ -458,12 +465,13 @@ def main():
         confirmation_thread = threading.Thread(target=resend_unconfirmed_packets, args=(udp_socket,))
         confirmation_thread.start()
 
+        # Informe que está online
+        start_sync(udp_socket)
+
         # Envie a chave pública para todos os pares da lista
         for peer in peer_addresses:
             udp_socket.sendto(public_key_bytes, peer)
         
-        # Informe que está online
-        start_sync(udp_socket)
 
         while True:
             print("[1] Para adicionar participantes a um grupo")
