@@ -118,7 +118,9 @@ def send_messages(udp_socket, my_ip, my_port):
         # Gere um novo ID de mensagem
         message_id = str(uuid.uuid4())
 
-         # Verifique a posição da mensagem na lista
+        print(all_messages)
+
+        # Verifique a posição da mensagem na lista
         if len(all_messages) == 0:
             last_message_id = "first"
         else:
@@ -156,8 +158,9 @@ def send_messages(udp_socket, my_ip, my_port):
             # Envie a confirmação
             udp_socket.sendto(encrypted_confirmation, peer_addr)
 
-        if message_data not in all_messages:
-            all_messages.append(message_data)
+        message_save = ((my_ip, my_port), message_data)
+        if message_save not in all_messages:
+            all_messages.append(message_save)
 
 # Função para receber mensagens em formato JSON
 def receive_messages(udp_socket, private_key_str, public_key_str):
