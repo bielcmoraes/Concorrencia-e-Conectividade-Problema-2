@@ -124,7 +124,7 @@ def send_messages(udp_socket, my_ip, my_port):
         if len(all_messages) == 0:
             last_message_id = "first"
         else:
-            last_message_id = all_messages[-1]["message_id"]
+            last_message_id = all_messages[-1][1]["message_id"]
 
         # Crie um dicionário para a mensagem em formato JSON
         message_data = {
@@ -241,9 +241,10 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
 # Função para ordenar mensagens com base no "last_message_id"
 def order_messages(unordered_messages):
     # Função auxiliar para calcular a chave de ordenação
-    def sort_key(message):
-        last_message_id = message["last_message_id"]
-        message_id = message["message_id"]
+    def sort_key(message_tuple):
+        sender_address, message = message_tuple
+        last_message_id = message.get("last_message_id")
+        message_id = message.get("message_id")
 
         # Converter as strings em UUIDs válidos
         try:
@@ -264,8 +265,8 @@ def order_messages(unordered_messages):
         return (last_message_id, message_id)
 
     # Filtrar mensagens com last_message_id igual a "first" e ordenar o restante
-    first_messages = [message for message in unordered_messages if message["last_message_id"] == "first"]
-    other_messages = [message for message in unordered_messages if message["last_message_id"] != "first"]
+    first_messages = [message_tuple for message_tuple in unordered_messages if message_tuple[1].get("last_message_id") == "first"]
+    other_messages = [message_tuple for message_tuple in unordered_messages if message_tuple[1].get("last_message_id") != "first"]
     ordered_messages = first_messages + sorted(other_messages, key=sort_key)
 
     return ordered_messages
