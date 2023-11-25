@@ -301,6 +301,7 @@ def receive_messages(udp_socket, my_address, private_key, public_key):
                 elif message_type == "SyncP":
                     if "message_id" in message_data and "size" in message_data and "part" in message_data:
                         message_id = message_data["message_id"]
+                        
                         # Verifica se existe uma chave para a parte da mensagem e cria caso não exista
                         message_part_exists = parts_messages.get(message_id)
                         if message_part_exists is not None:
