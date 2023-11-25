@@ -107,6 +107,7 @@ def system_sync():
     global all_messages
 
     while True:
+        print("Sync ao vivo", parts_messages)
         for package_id in parts_messages:
             package_list = parts_messages.get(package_id)
             if len(package_list) == package_list[0]["size"]: # Verifica se todas as partes chegaram
@@ -124,7 +125,7 @@ def system_sync():
                 parts_messages.pop(package_id) # Retira os pacotes completos que já foram sincronizados da lista
         
         # Garante que a sincronização ocorra em um período de tempo pré definido
-        time.sleep(20)
+        time.sleep(5)
 
 # Função para reenviar pacotes não confirmados
 def resend_unconfirmed_packets(udp_socket):
@@ -450,8 +451,8 @@ def main():
         confirmation_thread.start()
 
         # Iniciar a thread para sincronizar constantemente o sistema a cada "X" tempo
-        confirmation_thread = threading.Thread(target=system_sync)
-        confirmation_thread.start()
+        sync_thread = threading.Thread(target=system_sync)
+        sync_thread.start()
 
         # Iniciar a thread para sincronizar constantemente o sistema a cada "X" tempo
         confirmation_thread = threading.Thread(target=resend_unconfirmed_packets, args=(udp_socket,))
