@@ -203,7 +203,7 @@ def receive_messages(udp_socket, private_key_str, public_key_str):
                             udp_socket.sendto(encrypted_confirmation, addr)
 
                             # Adicione a mensagem à lista de mensagens
-                            all_messages.append(message_data)
+                            all_messages.append((addr, message_data)) #Tupla com endereço/porta e mensagem
 
                     elif message_type == "Confirmation":
                         if "message_id" in message_data:
@@ -272,7 +272,7 @@ def read_messages():
     all_messages_sorted = order_messages(all_messages)
     print("\nTodas as mensagens: ")
     for message_data in all_messages_sorted:
-        print(f"-{message_data['sender_ip']}:{message_data['sender_port']} - {message_data['text']}")
+        print(message_data)
     print()
 
 # Função para limpar o terminal independente do S.O
