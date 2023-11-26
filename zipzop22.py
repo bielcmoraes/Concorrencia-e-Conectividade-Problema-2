@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 
 # Lista de pares participantes do grupo
-peer_addresses = [("192.168.0.121", 6666)]
+peer_addresses = [("192.168.0.121", 5555)]
 
 # Dicionário para armazenar as chaves públicas dos pares
 public_keys = {}
@@ -402,11 +402,10 @@ def receive_messages(udp_socket, private_key_str, my_public_key):
                 pass
 
         except socket.timeout as e:
-            # print("socket.timeout:", e)
-            pass
+            print("socket.timeout:", e)
 
         except OSError as e:
-            # print("socket.OSError:", e)
+            print("socket.OSError:", e)
             if e.errno == 10054 and udp_socket.fileno() == -1:
                 udp_socket = conect_socket((my_ip, my_port))
 
