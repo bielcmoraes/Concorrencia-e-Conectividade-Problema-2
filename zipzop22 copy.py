@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 
 # Lista de pares participantes do grupo
-peer_addresses = [("192.168.0.121", 5555), ("192.168.0.121", 7777)]
+peer_addresses = [("192.168.0.121", 5555), ("192.168.0.121", 6666)]
 
 # Lista de pares online
 peers_on = []
