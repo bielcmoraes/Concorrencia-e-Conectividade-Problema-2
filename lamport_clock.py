@@ -11,7 +11,4 @@ class LamportClock:
         return self.time
 
     def update(self, new_time):
-        if new_time == self.time:
-            self.increment()
-        else:
-            self.time = max(self.time, new_time)
+        self.time = max(self.time, new_time) + 1
