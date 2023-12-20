@@ -7,7 +7,7 @@ import time
 from queue import Queue
 from lamport_clock import LamportClock
 
-peer_addresses = [("172.16.103.1", 5555), ("172.16.103.2", 5555), ("172.16.103.3", 5555), ("172.16.103.4", 5555), ("172.16.103.5", 5555), ("172.16.103.6", 5555), ("172.16.103.7", 5555), ("172.16.103.8", 5555), ("172.16.103.9", 5555), ("172.16.103.10", 5555)]
+peer_addresses = [("172.16.103.1", 5555), ("172.16.103.2", 5555), ("172.16.103.3", 5555), ("172.16.103.4", 5555), ("172.16.103.5", 5555), ("172.16.103.6", 5555), ("172.16.103.7", 5555), ("172.16.103.8", 5555), ("172.16.103.9", 5555), ("172.16.103.10", 5555), ("172.16.103.11", 5555), ("172.16.103.12", 5555), ("172.16.103.13", 5555), ("172.16.103.14", 5555)]
 received_packets = Queue()
 lamport_clock = LamportClock()
 my_info = (None, None)
@@ -24,7 +24,7 @@ def start_sync():
     # Crie um dicionário para a mensagem em formato JSON
     message_data = {
         "message_type": "Sync",
-        "message_id": (my_info[0], message_id),
+        "message_id": [my_info[0], message_id],
         "text": "Start sync."
     }
 
@@ -85,7 +85,7 @@ def send_messages():
         # Crie um dicionário para a mensagem em formato JSON
         message_data = {
             "message_type": "Message",
-            "message_id": (my_info[0], message_id),
+            "message_id": [my_info[0], message_id],
             "text": message_text
         }
 
@@ -124,11 +124,12 @@ def order_packages():
                         if "message_id" in message_data and "text" in message_data:
                             message_id = message_data["message_id"]
 
-
                             # Adicione a mensagem à lista de mensagens
                             if ((message_id[0], message_data)) not in all_messages:
+                                print(message_data)
                                 all_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
                                 lamport_clock.update(message_id[1])
+                                print("AA", all_messages)
 
                     elif message_type == "Sync":
                             
@@ -195,7 +196,7 @@ def main():
             time_sync_thread.daemon = True
             time_sync_thread.start()
 
-            clear_terminal()
+            # clear_terminal()
 
             while True:
                 print("[1] Para enviar mensagens")
@@ -207,7 +208,7 @@ def main():
                 if menu_main == 1:
                     # Inicie a função send_messages na thread principal
                     send_messages()
-                    clear_terminal()
+                    # clear_terminal()
 
                 elif menu_main == 2:
                     read_messages()
