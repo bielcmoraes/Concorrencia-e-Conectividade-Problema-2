@@ -7,7 +7,7 @@ import time
 from queue import Queue
 from lamport_clock import LamportClock
 
-peer_addresses = [("192.168.43.107", 3333), ("192.168.43.198", 2222), ("192.168.43.198", 1111)]
+peer_addresses = [("172.16.103.1", 5555), ("172.16.103.2", 5555), ("172.16.103.3", 5555), ("172.16.103.4", 5555), ("172.16.103.5", 5555), ("172.16.103.6", 5555), ("172.16.103.7", 5555), ("172.16.103.8", 5555), ("172.16.103.9", 5555), ("172.16.103.10", 5555)]
 received_packets = Queue()
 lamport_clock = LamportClock()
 my_info = (None, None)
