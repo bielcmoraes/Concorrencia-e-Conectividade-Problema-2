@@ -65,7 +65,7 @@ Ao implementar a cifra de César, o software ganhou em desempenho e simplicidade
 # 3. Resultados
 Ao iniciar o sistema, é solicitado do usuário o endereço IP da sua máquina na rede e a porta que deseja utilizar para a troca de mensagens (por ser um protótipo é necessário utilizar a porta 5555). Em seguida, é possível acessar um menu interativo com três opções: [1] para enviar mensagens, [2] para visualizar as mensagens recebidas e [3] para encerrar o aplicativo. Conforme a imagem abaixo:
 
-![Menu principal.]()
+![Menu principal.](https://github.com/bielcmoraes/Concorrencia-e-Conectividade-Problema-2/blob/master/readme_images/menu_principal.png)
 
 É importante salientar que após a sincronização incial do sistema (a sincronização inicial é capaz de atualizar o timestamp do relógio lógico e recuperar as mensagens trocadas enquanto o usuário estivesse offline, desde que pelo menos um dos pares permanecesse ativo), uma nova sincronização é realizada a cada 5 segundos onde todos os pares ativos enviam sua lista de mensagens atual garantindo que todos tenham a mesma versão da conversa.
 
