@@ -129,8 +129,7 @@ def order_packages():
                                 print(message_data)
                                 all_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
                                 lamport_clock.update(message_id[1])
-                                print("AA", all_messages)
-
+                                
                     elif message_type == "Sync":
                             
                             if "message_id" in message_data and "text" in message_data:
