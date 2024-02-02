@@ -127,69 +127,67 @@ def order_packages():
         addr = package_received[0]
         data = package_received[1]
 
-        try:
-            data_decrypt = decrypt_message(data.decode("utf-8"), OPERATION_NUMBER)
+        # try:
+        data_decrypt = decrypt_message(data.decode("utf-8"), OPERATION_NUMBER)
 
-            if data_decrypt:
-                # Desserializar a mensagem JSON
-                message_data = json.loads(data_decrypt)
+        if data_decrypt:
+            # Desserializar a mensagem JSON
+            message_data = json.loads(data_decrypt)
+            print(message_data)
+            if "message_type" in message_data:
+                message_type = message_data["message_type"]
+                if message_type == "Message":
+                    # {'message_type': 'Message', 'message_id': ['192.168.43.107', 9], 'text': 'fala tu', 'peer_addresses_size': 9}
+                    if "message_id" in message_data and "text" in message_data:
+                        message_id = message_data["message_id"]
 
-                if "message_type" in message_data:
-                    message_type = message_data["message_type"]
-                    if message_type == "Message":
-                        # {'message_type': 'Message', 'message_id': ['192.168.43.107', 9], 'text': 'fala tu', 'peer_addresses_size': 9}
-                        if "message_id" in message_data and "text" in message_data:
-                            message_id = message_data["message_id"]
+                        # Adicione a mensagem à lista de mensagens
+                        if ((message_id[0], message_data)) not in unconfirmed_messages:
 
-                            # Adicione a mensagem à lista de mensagens
-                            if ((message_id[0], message_data)) not in unconfirmed_messages:
+                            # Crie um dicionário para a mensagem de ack em formato JSON
+                            message_ack_data = {
+                                "message_type": "Ack",
+                                "message_id": [my_info[0], message_id],
+                                "peer_addresses_size": message_data["peer_addresses_size"]
+                            }
 
-                                # Crie um dicionário para a mensagem de ack em formato JSON
-                                message_ack_data = {
-                                    "message_type": "Ack",
-                                    "message_id": [my_info[0], message_id],
-                                    "peer_addresses_size": message_data["peer_addresses_size"]
-                                }
+                            # Serializar a mensagem de ack em JSON
+                            message_ack_json = json.dumps(message_ack_data)
 
-                                # Serializar a mensagem de ack em JSON
-                                message_ack_json = json.dumps(message_ack_data)
+                            encrypted_message_ack = encrypt_message(message_ack_json, OPERATION_NUMBER)
+                            send_pacote(encrypted_message_ack)
 
-                                encrypted_message_ack = encrypt_message(message_ack_json, OPERATION_NUMBER)
-                                send_pacote(encrypted_message_ack)
-
-                                unconfirmed_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
-                                
-                                lamport_clock.update(message_id[1])
-                                
-                    elif message_type == "Sync":
+                            unconfirmed_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
                             
-                            if "message_id" in message_data and "text" in message_data:
-                                text_sync = message_data["text"]
-                                if "Start sync" in text_sync:  # Envia a lista de pares atualizada e a lista de mensagens
-
-                                # Id da lista de mensagens que será enviada                                
-                                    # Envie a lista de mensagens atual
-                                    for message in all_messages:
-                                        message_json = json.dumps(message[1])
-                                        message_encrypted = encrypt_message(message_json, OPERATION_NUMBER)
-                                        send_pacote(message_encrypted)
-
-                    elif message_type == "Ack":
-                        ack_id = tuple(message_data["message_id"])
-                        ack_exists = ack_messages.get(ack_id)
-                        if ack_exists:
-                            ack_messages[ack_id].append(message_data)
-                        else:
-                            ack_messages[ack_id] = [message_data]
+                            lamport_clock.update(message_id[1])
+                            
+                elif message_type == "Sync":
                         
-        except Exception as e:
-            print("Erro ao ordenar pacotes: ", e)
+                        if "message_id" in message_data and "text" in message_data:
+                            text_sync = message_data["text"]
+                            if "Start sync" in text_sync:  # Envia a lista de pares atualizada e a lista de mensagens
+
+                            # Id da lista de mensagens que será enviada                                
+                                # Envie a lista de mensagens atual
+                                for message in all_messages:
+                                    message_json = json.dumps(message[1])
+                                    message_encrypted = encrypt_message(message_json, OPERATION_NUMBER)
+                                    send_pacote(message_encrypted)
+
+                elif message_type == "Ack":
+                    ack_id = tuple(message_data["message_id"])
+                    ack_exists = ack_messages.get(ack_id)
+                    if ack_exists:
+                        ack_messages[ack_id].append(message_data)
+                    else:
+                        ack_messages[ack_id] = [message_data]
+                        
+        # except Exception as e:
+        #     print("Erro ao ordenar pacotes: ", e)
 
 def secure_messages():
 
     while True:
-
-        time.sleep(1) 
         for ack_key in ack_messages:
             ack_list_size = len(ack_messages[ack_key])
             peer_addresses_list_size = ack_messages[ack_key][0]["peer_addresses_size"]
@@ -198,7 +196,7 @@ def secure_messages():
                     message_id = tuple(message[1]["message_id"])
                     if message_id == ack_key:
                         all_messages.append(message)
-                        del ack_messages[ack_key]
+                        del ack_messages[message_id]
 
 def order_messages(messages):
     # Utilize a função sorted do Python, fornecendo a função de ordenação com base no carimbo de tempo e, em caso de empate, no maior valor em messages[0]
