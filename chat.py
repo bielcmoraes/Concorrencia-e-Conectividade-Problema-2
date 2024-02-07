@@ -175,10 +175,8 @@ def order_packages():
                                         send_pacote(message_encrypted)
 
                     elif message_type == "Ack":
-                        print(message_data["message_id"])
-                        ack_id = tuple(message_data["message_id"])
+                        ack_id = tuple(message_data["message_id"][1])
                         ack_exists = ack_messages.get(ack_id)
-                        print(ack_exists)
                         if ack_exists:
                             ack_messages[ack_id].append(message_data)
                         else:
