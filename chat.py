@@ -175,13 +175,14 @@ def order_packages():
                                         send_pacote(message_encrypted)
 
                     elif message_type == "Ack":
+                        print(message_data["message_id"])
                         ack_id = tuple(message_data["message_id"])
                         ack_exists = ack_messages.get(ack_id)
+                        print(ack_exists)
                         if ack_exists:
                             ack_messages[ack_id].append(message_data)
                         else:
                             ack_messages[ack_id] = [message_data]
-                        
         except Exception as e:
             print("Erro ao ordenar pacotes: ", e)
 
@@ -195,8 +196,7 @@ def secure_messages():
             peer_addresses_list_size = ack_messages[ack_key][0]["peer_addresses_size"]
             if ack_list_size == peer_addresses_list_size: #Verifica se todosos pares da lista no momento de envio da mensagem confirmaram
                 for message in unconfirmed_messages:
-                    message_id = tuple(message[1]["message_id"])
-                    if message_id == ack_key:
+                    if message["message_id"] == ack_key:
                         all_messages.append(message)
                         del ack_messages[ack_key]
 
