@@ -7,14 +7,10 @@ import time
 from queue import Queue
 from lamport_clock import LamportClock
 
-#peer_addresses = [("172.16.103.1", 5555), ("172.16.103.2", 5555), ("172.16.103.3", 5555), ("172.16.103.4", 5555), ("172.16.103.5", 5555), ("172.16.103.6", 5555), ("172.16.103.7", 5555), ("172.16.103.8", 5555), ("172.16.103.9", 5555), ("172.16.103.10", 5555), ("172.16.103.11", 5555), ("172.16.103.12", 5555), ("172.16.103.13", 5555), ("172.16.103.14", 5555)]
-
-peer_addresses = [("192.168.0.121", 5555), ("192.168.0.113", 5555)]
+peer_addresses = [("172.16.103.1", 5555), ("172.16.103.2", 5555), ("172.16.103.3", 5555), ("172.16.103.4", 5555), ("172.16.103.5", 5555), ("172.16.103.6", 5555), ("172.16.103.7", 5555), ("172.16.103.8", 5555), ("172.16.103.9", 5555), ("172.16.103.10", 5555), ("172.16.103.11", 5555), ("172.16.103.12", 5555), ("172.16.103.13", 5555), ("172.16.103.14", 5555)]
 received_packets = Queue()
 lamport_clock = LamportClock()
 my_info = (None, None)
-ack_messages = {}
-unconfirmed_messages = []
 all_messages = []
 
 OPERATION_NUMBER = 5
@@ -90,35 +86,22 @@ def send_messages():
         message_data = {
             "message_type": "Message",
             "message_id": [my_info[0], message_id],
-            "text": message_text,
-            "peer_addresses_size": len(peer_addresses)
-        }
-
-        # Crie um dicionário para a mensagem de ack em formato JSON
-        message_ack_data = {
-            "message_type": "Ack",
-            "message_id": [my_info[0], message_id],
-            "peer_addresses_size": message_data["peer_addresses_size"]
+            "text": message_text
         }
 
         # Serializar a mensagem em JSON
         message_json = json.dumps(message_data)
 
-        # Serializar a mensagem de ack em JSON
-        message_ack_json = json.dumps(message_ack_data)
-
         # Enviar a mensagem para todos os pares
         
         encrypted_message = encrypt_message(message_json, OPERATION_NUMBER)
-        encrypted_message_ack = encrypt_message(message_ack_json, OPERATION_NUMBER)
         if encrypted_message:
             send_pacote(encrypted_message)
-            send_pacote(encrypted_message_ack)
 
         message_save = (my_info[0], message_data)
-        if message_save not in unconfirmed_messages:
-            unconfirmed_messages.append(message_save)
-            #lamport_clock.increment()
+        if message_save not in all_messages:
+            all_messages.append(message_save)
+            lamport_clock.increment()
 
 def order_packages():
     
@@ -137,28 +120,14 @@ def order_packages():
                 if "message_type" in message_data:
                     message_type = message_data["message_type"]
                     if message_type == "Message":
-                        # {'message_type': 'Message', 'message_id': ['192.168.43.107', 9], 'text': 'fala tu', 'peer_addresses_size': 9}
+                        # {'message_type': 'Message', 'message_id': ['192.168.43.107', 9], 'text': 'fala tu'}
                         if "message_id" in message_data and "text" in message_data:
                             message_id = message_data["message_id"]
 
                             # Adicione a mensagem à lista de mensagens
-                            if ((message_id[0], message_data)) not in unconfirmed_messages:
-
-                                # Crie um dicionário para a mensagem de ack em formato JSON
-                                message_ack_data = {
-                                    "message_type": "Ack",
-                                    "message_id": [my_info[0], message_id],
-                                    "peer_addresses_size": message_data["peer_addresses_size"]
-                                }
-
-                                # Serializar a mensagem de ack em JSON
-                                message_ack_json = json.dumps(message_ack_data)
-
-                                encrypted_message_ack = encrypt_message(message_ack_json, OPERATION_NUMBER)
-                                send_pacote(encrypted_message_ack)
-
-                                unconfirmed_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
-                                
+                            if ((message_id[0], message_data)) not in all_messages:
+                                print(message_data)
+                                all_messages.append((message_id[0], message_data))  # Tupla com endereço/porta e mensagem
                                 lamport_clock.update(message_id[1])
                                 
                     elif message_type == "Sync":
@@ -173,31 +142,9 @@ def order_packages():
                                         message_json = json.dumps(message[1])
                                         message_encrypted = encrypt_message(message_json, OPERATION_NUMBER)
                                         send_pacote(message_encrypted)
-
-                    elif message_type == "Ack":
-                        ack_id = message_data["message_id"]
-                        ack_exists = ack_messages.get(ack_id)
-                        if ack_exists:
-                            ack_messages[ack_id].append(message_data)
-                        else:
-                            ack_messages[ack_id] = [message_data]
+   
         except Exception as e:
             print("Erro ao ordenar pacotes: ", e)
-
-def secure_messages():
-
-    while True:
-
-        time.sleep(1) 
-        for ack_key in ack_messages:
-            ack_list_size = len(ack_messages[ack_key])
-            peer_addresses_list_size = ack_messages[ack_key][0]["peer_addresses_size"]
-            if ack_list_size == peer_addresses_list_size: #Verifica se todosos pares da lista no momento de envio da mensagem confirmaram
-                for message in unconfirmed_messages:
-                    if message["message_id"] == ack_key:
-                        all_messages.append(message)
-                        del ack_messages[ack_key]
-
 
 def order_messages(messages):
     # Utilize a função sorted do Python, fornecendo a função de ordenação com base no carimbo de tempo e, em caso de empate, no maior valor em messages[0]
@@ -244,12 +191,7 @@ def main():
             order_packages_thread.start()
 
             # Iniciar a thread para solicitar constantemente a sincronização do sistema a cada "X" tempo
-            # time_sync_thread = threading.Thread(target=time_sync)
-            # time_sync_thread.daemon = True
-            # time_sync_thread.start()
-
-            # Iniciar a thread para solicitar constantemente a sincronização do sistema a cada "X" tempo
-            time_sync_thread = threading.Thread(target=secure_messages)
+            time_sync_thread = threading.Thread(target=time_sync)
             time_sync_thread.daemon = True
             time_sync_thread.start()
 
