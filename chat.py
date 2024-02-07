@@ -175,8 +175,8 @@ def order_packages():
                                         send_pacote(message_encrypted)
 
                     elif message_type == "Ack":
-                        ack_id = tuple(message_data["message_id"][1])
-                        ack_exists = ack_messages.get(ack_id[1])
+                        ack_id = message_data["message_id"]
+                        ack_exists = ack_messages.get(ack_id)
                         if ack_exists:
                             ack_messages[ack_id].append(message_data)
                         else:
@@ -197,6 +197,7 @@ def secure_messages():
                     if message["message_id"] == ack_key:
                         all_messages.append(message)
                         del ack_messages[ack_key]
+
 
 def order_messages(messages):
     # Utilize a função sorted do Python, fornecendo a função de ordenação com base no carimbo de tempo e, em caso de empate, no maior valor em messages[0]
